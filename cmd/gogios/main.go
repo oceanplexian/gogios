@@ -21,6 +21,7 @@ import (
 	"github.com/oceanplexian/gogios/internal/logging"
 	"github.com/oceanplexian/gogios/internal/macros"
 	"github.com/oceanplexian/gogios/internal/notify"
+	"github.com/oceanplexian/gogios/internal/nrdp"
 	"github.com/oceanplexian/gogios/internal/objects"
 	"github.com/oceanplexian/gogios/internal/scheduler"
 	"github.com/oceanplexian/gogios/internal/status"
@@ -698,6 +699,31 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		}
 	}
 
+	// --- NRDP relay server ---
+	var nrdpServer *nrdp.Server
+	if mainCfg.NRDPListen != "" {
+		nrdpCfg := nrdp.Config{
+			Listen:         mainCfg.NRDPListen,
+			Path:           mainCfg.NRDPPath,
+			TokenHash:      mainCfg.NRDPTokenHash,
+			DynamicEnabled: mainCfg.NRDPDynamicEnabled,
+			DynamicTTL:     time.Duration(mainCfg.NRDPDynamicTTL) * time.Second,
+			DynamicPrune:   time.Duration(mainCfg.NRDPDynamicPrune) * time.Second,
+			SSLCert:        mainCfg.NRDPSSLCert,
+			SSLKey:         mainCfg.NRDPSSLKey,
+		}
+		nrdpServer = nrdp.New(nrdpCfg, store, resultCh, nagLogger)
+		if err := nrdpServer.Start(); err != nil {
+			nagLogger.Log("Warning: Failed to start NRDP server: %v", err)
+		} else {
+			nagLogger.Log("NRDP relay listening on %s%s", mainCfg.NRDPListen, mainCfg.NRDPPath)
+			if mainCfg.NRDPDynamicEnabled {
+				nagLogger.Log("NRDP dynamic host/service registration enabled (TTL=%ds, prune=%ds)",
+					mainCfg.NRDPDynamicTTL, mainCfg.NRDPDynamicPrune)
+			}
+		}
+	}
+
 	// --- Initialize scheduling ---
 	nagLogger.Log("Scheduling initial checks...")
 	sched.Init(store.Hosts, store.Services)
@@ -750,6 +776,10 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 
 	// --- Shutdown ---
 	nagLogger.Log("Shutting down...")
+
+	if nrdpServer != nil {
+		nrdpServer.Stop()
+	}
 
 	if livestatusServer != nil {
 		livestatusServer.Stop()

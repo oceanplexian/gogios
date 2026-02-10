@@ -207,3 +207,47 @@ func (s *ObjectStore) GetServicesForHost(hostName string) []*Service {
 	}
 	return result
 }
+
+// RemoveHost removes a host and all its services from the store.
+// Caller must hold the write lock.
+func (s *ObjectStore) RemoveHost(name string) {
+	host := s.hostsByName[name]
+	if host == nil {
+		return
+	}
+	// Remove all services for this host first
+	var keptServices []*Service
+	for _, svc := range s.Services {
+		if svc.Host != nil && svc.Host.Name == name {
+			delete(s.servicesByHostDesc, svcKey(name, svc.Description))
+		} else {
+			keptServices = append(keptServices, svc)
+		}
+	}
+	s.Services = keptServices
+
+	// Remove the host
+	delete(s.hostsByName, name)
+	for i, h := range s.Hosts {
+		if h.Name == name {
+			s.Hosts = append(s.Hosts[:i], s.Hosts[i+1:]...)
+			break
+		}
+	}
+}
+
+// RemoveService removes a single service from the store.
+// Caller must hold the write lock.
+func (s *ObjectStore) RemoveService(hostName, desc string) {
+	key := svcKey(hostName, desc)
+	if _, exists := s.servicesByHostDesc[key]; !exists {
+		return
+	}
+	delete(s.servicesByHostDesc, key)
+	for i, svc := range s.Services {
+		if svc.Host != nil && svc.Host.Name == hostName && svc.Description == desc {
+			s.Services = append(s.Services[:i], s.Services[i+1:]...)
+			break
+		}
+	}
+}

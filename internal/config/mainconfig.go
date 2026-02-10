@@ -171,6 +171,16 @@ type MainConfig struct {
 	QuerySocket                   string
 	LivestatusTCP                 string
 
+	// NRDP Relay (Gogios extension)
+	NRDPListen         string // listen address, e.g. ":5668"
+	NRDPPath           string // URL path, default "/nrdp/"
+	NRDPTokenHash      string // bcrypt hash of accepted token
+	NRDPDynamicEnabled bool   // auto-register hosts/services from NRDP submissions
+	NRDPDynamicTTL     int    // seconds before stale dynamic objects are pruned (default 86400)
+	NRDPDynamicPrune   int    // seconds between prune runs (default 600)
+	NRDPSSLCert        string // TLS certificate file
+	NRDPSSLKey         string // TLS key file
+
 	// For resolving relative paths
 	basedir string
 }
@@ -235,6 +245,9 @@ func NewMainConfig() *MainConfig {
 		TimeChangeThreshold:     900,
 		HostPerfdataFileMode:    'a',
 		ServicePerfdataFileMode: 'a',
+		NRDPPath:                "/nrdp/",
+		NRDPDynamicTTL:          86400,
+		NRDPDynamicPrune:        600,
 	}
 }
 
@@ -332,6 +345,24 @@ func (c *MainConfig) setDirective(key, val string) error {
 		c.QuerySocket = c.resolvePath(val)
 	case "livestatus_tcp":
 		c.LivestatusTCP = val
+
+	// NRDP
+	case "nrdp_listen":
+		c.NRDPListen = val
+	case "nrdp_path":
+		c.NRDPPath = val
+	case "nrdp_token_hash":
+		c.NRDPTokenHash = val
+	case "nrdp_dynamic_enabled":
+		c.NRDPDynamicEnabled = val == "1"
+	case "nrdp_dynamic_ttl":
+		return setInt(&c.NRDPDynamicTTL, val)
+	case "nrdp_dynamic_prune_interval":
+		return setInt(&c.NRDPDynamicPrune, val)
+	case "nrdp_ssl_cert":
+		c.NRDPSSLCert = c.resolvePath(val)
+	case "nrdp_ssl_key":
+		c.NRDPSSLKey = c.resolvePath(val)
 
 	// Permissions
 	case "nagios_user":

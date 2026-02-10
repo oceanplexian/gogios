@@ -13,7 +13,8 @@
   <code>Livestatus / LQL Compatible</code> &nbsp;&middot;&nbsp;
   <code>Thruk Compatible</code> &nbsp;&middot;&nbsp;
   <code>Nagios Plugin Compatible</code> &nbsp;&middot;&nbsp;
-  <code>Zero Dependencies</code>
+  <code>NRDP Relay Built-in</code> &nbsp;&middot;&nbsp;
+  <code>Near-Zero Dependencies</code>
 </p>
 
 Zero dependencies. No CGIs. No Apache. No NEB modules. No PHP. No Perl. No tears.
@@ -32,6 +33,7 @@ Nagios 4.x works. It's battle-tested. But it carries decades of architectural de
 - Drop-in replacement for Nagios 4.1.1 core
 - Reads your existing `nagios.cfg`, object configs, templates, resource files, all of it
 - Built-in Livestatus server (TCP + Unix socket), Thruk just works
+- Built-in NRDP relay endpoint with dynamic host/service auto-registration
 - External command pipe, your scripts don't know the difference
 - `status.dat` and `retention.dat` compatibility
 - One static binary. `scp` it to a box and run it. Done.
@@ -157,6 +159,11 @@ gogios
     │   ├── escalation.go        #   Escalation range matching + contact expansion
     │   └── commands.go          #   Notification command execution
     │
+    ├── nrdp/                    # NRDP relay endpoint
+    │   ├── server.go            #   HTTP server, bcrypt auth, localhost bypass
+    │   ├── payload.go           #   XML/JSON parsing, response formatting (4 content types)
+    │   └── dynamic.go           #   Dynamic host/service auto-registration with TTL pruning
+    │
     ├── objects/                 # Core data model
     │   ├── types.go             #   Host, Service, Contact, Command, etc. structs
     │   └── store.go             #   In-memory object registry with indexed lookups
@@ -174,7 +181,7 @@ gogios
         └── retention.go         #   retention.dat read/write for state recovery
 ```
 
-**Zero external dependencies.** Pure Go stdlib. `go.mod` is lonely and that's fine.
+**One external dependency** (`golang.org/x/crypto` for bcrypt). Everything else is pure Go stdlib.
 
 ---
 
@@ -234,6 +241,24 @@ This isn't a toy. Here's the full feature matrix:
 | Downtime start/end/cancel notifications | Done |
 | Comments (user, downtime, acknowledgement, flapping) | Done |
 | Persistent and non-persistent comments | Done |
+
+### NRDP Relay
+
+| Feature | Status |
+|---------|--------|
+| HTTP endpoint (`POST /nrdp/`) with configurable listen address and path | Done |
+| 4 content types: XML form, JSON form, raw XML, raw JSON | Done |
+| bcrypt token authentication (cost 14) | Done |
+| Localhost bypass (`127.0.0.1` / `::1` skip auth) | Done |
+| Response format mirrors request format | Done |
+| Request ID for log correlation (3-letter codes) | Done |
+| Results injected into standard passive check pipeline | Done |
+| Dynamic host auto-creation on first NRDP submission | Done |
+| Dynamic service auto-creation on first NRDP submission | Done |
+| TTL-based pruning of stale dynamic objects (configurable) | Done |
+| Static config objects protected from pruning | Done |
+| Optional TLS (cert + key) | Done |
+| Zero overhead when disabled (no goroutines, no socket) | Done |
 
 ### External Commands
 
@@ -373,6 +398,113 @@ COMMAND [1234567890] SCHEDULE_FORCED_SVC_CHECK;web-01;HTTP;1234567890
 
 ---
 
+## NRDP Relay
+
+Gogios includes a built-in NRDP (Nagios Remote Data Processor) endpoint. Any tool that speaks NRDP — [nrdc](https://github.com/Captain-Kiwi/nrdc), Nagios NRDP clients, custom scripts — can push passive check results over HTTP without touching the command pipe.
+
+### Configuration
+
+```ini
+# In your nagios.cfg:
+
+# Enable the NRDP HTTP endpoint (leave empty or omit to disable)
+nrdp_listen=0.0.0.0:5668
+nrdp_path=/nrdp/
+
+# bcrypt hash of your auth token (cost 14 recommended)
+# Generate with: htpasswd -nbBC 14 "" "your-token" | cut -d: -f2
+nrdp_token_hash=$2b$14$...
+
+# Optional TLS
+#nrdp_ssl_cert=/path/to/cert.pem
+#nrdp_ssl_key=/path/to/key.pem
+```
+
+If `nrdp_listen` is not set, NRDP is completely disabled — zero overhead, no goroutines, no listening socket.
+
+### Authentication
+
+- **Token auth:** Clients send a `token` field (form param or query param). Gogios compares it against the bcrypt hash in `nrdp_token_hash`.
+- **Localhost bypass:** Requests from `127.0.0.1` or `::1` skip authentication.
+- **Empty token or empty hash:** Always rejected (no open relay by default).
+
+### Accepted Formats
+
+| Format | Content-Type | Payload Field |
+|--------|-------------|--------------|
+| XML form (native NRDP) | `application/x-www-form-urlencoded` | `XMLDATA` |
+| JSON form | `application/x-www-form-urlencoded` | `JSONDATA` |
+| Raw XML | `text/xml` or `application/xml` | request body |
+| Raw JSON | `application/json` | request body |
+
+Response format mirrors the request format (XML in → XML out, JSON in → JSON out).
+
+### How It Works
+
+Results received via NRDP are injected into the same pipeline as `PROCESS_SERVICE_CHECK_RESULT` / `PROCESS_HOST_CHECK_RESULT` external commands. The full state machine applies: SOFT/HARD transitions, notifications, flap detection, downtimes — all of it.
+
+### Dynamic Host/Service Auto-Registration
+
+When enabled, Gogios automatically creates host and service objects on the fly when it receives NRDP results for objects that don't exist in the configuration. This is useful for agents like nrdc that submit checks for hosts Gogios hasn't seen before.
+
+```ini
+# Enable dynamic registration
+nrdp_dynamic_enabled=1
+
+# How long before a dynamic object is pruned if no new checks arrive (seconds, default 86400 = 24h)
+nrdp_dynamic_ttl=86400
+
+# How often the pruner runs (seconds, default 600 = 10 minutes)
+nrdp_dynamic_prune_interval=600
+```
+
+**Fast add, slow delete:** Dynamic objects are created instantly on first submission. They're only removed after `nrdp_dynamic_ttl` seconds of silence. Objects defined in your configuration files are never pruned.
+
+Dynamic objects are created with passive checks enabled and active checks disabled (no check command). They appear in `status.dat`, Livestatus, and Thruk like any other object.
+
+### Example: Submitting a Check Result
+
+```bash
+# XML form POST (native NRDP format, same as nrdc uses)
+curl -s -X POST "http://localhost:5668/nrdp/" \
+  -d "token=your-secret-token&cmd=submitcheck" \
+  --data-urlencode "XMLDATA=<?xml version='1.0'?>
+<checkresults>
+  <checkresult type='service' checktype='1'>
+    <hostname>web-01</hostname>
+    <servicename>HTTP</servicename>
+    <state>0</state>
+    <output>HTTP OK: 200 OK - 0.003s response time</output>
+  </checkresult>
+</checkresults>"
+
+# JSON POST
+curl -s -X POST "http://localhost:5668/nrdp/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "your-secret-token",
+    "checkresults": [{
+      "hostname": "web-01",
+      "servicename": "HTTP",
+      "state": 0,
+      "output": "HTTP OK: 200 OK - 0.003s response time"
+    }]
+  }'
+```
+
+### Log Output
+
+```
+[1707533401] NRDP relay listening on 0.0.0.0:5668/nrdp/
+[1707533401] NRDP dynamic host/service registration enabled (TTL=86400s, prune=600s)
+[1707534554] NRDP [AOA] Processing 3 Results from 192.168.1.50:45678 (xmlform)
+[1707534554] SERVICE ALERT: web-01;HTTP;OK;HARD;1;HTTP OK: 200 OK - 0.003s response time
+```
+
+Each NRDP request gets a 3-letter request ID (e.g., `[AOA]`) for log correlation.
+
+---
+
 ## Configuration Directives
 
 Gogios supports the full `nagios.cfg` directive set. If you've written a `nagios.cfg` before, it works the same way.
@@ -382,6 +514,9 @@ Gogios supports the full `nagios.cfg` directive set. If you've written a `nagios
 
 ### Livestatus (Gogios extension)
 `query_socket` `livestatus_tcp`
+
+### NRDP Relay (Gogios extension)
+`nrdp_listen` `nrdp_path` `nrdp_token_hash` `nrdp_dynamic_enabled` `nrdp_dynamic_ttl` `nrdp_dynamic_prune_interval` `nrdp_ssl_cert` `nrdp_ssl_key`
 
 ### Logging
 `use_syslog` `log_notifications` `log_service_retries` `log_host_retries` `log_event_handlers` `log_external_commands` `log_passive_checks` `log_initial_states` `log_current_states` `log_rotation_method` `debug_level` `debug_verbosity`
@@ -418,10 +553,11 @@ For the curious (or the masochistic), here's how it works under the hood.
 4. Restore state from `retention.dat` (if `retain_state_information=1`)
 5. Register external command handlers
 6. Start Livestatus server(s)
-7. Schedule initial checks with smart interleaving
-8. Write initial `status.dat`
-9. Enter main event loop
-10. Handle `SIGTERM`/`SIGINT` (clean shutdown) and `SIGHUP` (reserved)
+7. Start NRDP relay (if configured)
+8. Schedule initial checks with smart interleaving
+9. Write initial `status.dat`
+10. Enter main event loop
+11. Handle `SIGTERM`/`SIGINT` (clean shutdown) and `SIGHUP` (reserved)
 
 ### Event Loop
 
@@ -668,6 +804,61 @@ The benchmark generates synthetic Nagios configs, starts gogios, measures check 
 
 ---
 
+## Passive / NRDP Performance
+
+NRDP passive check ingestion was benchmarked from 100 to 100,000 dynamically-created services. All hosts and services were auto-registered on the fly (no pre-configured objects). The benchmark submits batched XML form POSTs from concurrent HTTP clients via localhost (auth bypass).
+
+### Ingestion Throughput
+
+<p align="center">
+  <img src="assets/readme/nrdp_throughput.png" alt="NRDP Throughput" width="700">
+</p>
+
+**Result:** Sustained ~37,000 passive results/sec from 5k to 100k dynamic services. At this rate, 100k services can be fully updated in under 3 seconds.
+
+### Batch Latency & Memory
+
+<p align="center">
+  <img src="assets/readme/nrdp_latency.png" alt="NRDP Latency" width="600">
+  <img src="assets/readme/nrdp_memory.png" alt="NRDP Memory" width="600">
+</p>
+
+P95 batch latency stays under 50ms for batches of 100 results up to 10k services. At 50k+ services with batch sizes of 500, latency increases to ~380ms per batch — still well within acceptable range since each batch carries 500 results.
+
+Memory scales linearly with the number of dynamically-registered objects, matching the active check memory profile.
+
+### Raw Numbers
+
+| Unique Services | Total Submitted | Batch Size | Concurrency | Results/sec | P95 Batch (ms) | RSS |
+|----------------|----------------|------------|-------------|-------------|----------------|-----|
+| 100 | 1,000 | 10 | 1 | 17,468 | 0.8 | 26MB |
+| 500 | 5,000 | 50 | 2 | 28,944 | 8.1 | 45MB |
+| 1,000 | 10,000 | 100 | 4 | 34,314 | 23.6 | 58MB |
+| 5,000 | 49,600 | 100 | 8 | 37,221 | 39.3 | 178MB |
+| 10,000 | 100,000 | 100 | 10 | 36,724 | 48.0 | 315MB |
+| 50,000 | 200,000 | 500 | 20 | 37,729 | 373.3 | 600MB |
+| 100,000 | 400,000 | 500 | 20 | 37,643 | 385.5 | 1.2GB |
+
+### Running the NRDP Benchmark
+
+```bash
+# Build the binary
+go build -o gogios-bench ./cmd/gogios
+
+# Run the full suite (100 → 100k services)
+go run bench/nrdp/bench.go -binary ./gogios-bench -out bench/nrdp_results.csv
+
+# Run a single scenario (e.g. 10k services only)
+go run bench/nrdp/bench.go -binary ./gogios-bench -only 10000
+
+# Generate README graphs from results
+python3 bench/plot_nrdp.py
+```
+
+The benchmark starts gogios with NRDP enabled (dynamic registration, no pre-configured objects), then sends batched XML form POSTs from concurrent HTTP clients. All hosts and services are auto-created via the dynamic registration system.
+
+---
+
 ## Scaling Guidelines
 
 The check throughput ceiling (~2,400 checks/sec with `/usr/bin/true`) is the theoretical maximum — real plugins take time to execute, so the practical limit depends on your check command runtimes.
@@ -697,9 +888,10 @@ The 256 default worker pool means up to 256 checks run simultaneously. If your a
 
 If `(number_of_services × average_plugin_runtime) / 60 > max_concurrent_checks`, you'll fall behind. At that point:
 
-1. Deploy check agents (NRPE, check_mk agent, node_exporter + adapter) on monitored hosts
-2. Have them push results via `PROCESS_SERVICE_CHECK_RESULT` through the command pipe or Livestatus
+1. Deploy check agents (nrdc, NRPE, check_mk agent, node_exporter + adapter) on monitored hosts
+2. Have them push results via NRDP, `PROCESS_SERVICE_CHECK_RESULT` through the command pipe, or Livestatus
 3. Gogios processes passive results through the same state machine — SOFT/HARD transitions, notifications, downtimes all work identically
+4. With `nrdp_dynamic_enabled=1`, new hosts and services are auto-created on first submission — no config file changes needed
 
 ---
 
@@ -710,7 +902,7 @@ If `(number_of_services × average_plugin_runtime) / 60 > max_concurrent_checks`
 go build -o gogios ./cmd/gogios
 ```
 
-Requires **Go 1.25.6+**. No external dependencies.
+Requires **Go 1.25.6+**. Only external dependency is `golang.org/x/crypto` (bcrypt for NRDP token auth).
 
 ---
 
@@ -738,7 +930,7 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out    # open in browser
 ```
 
-The test suite covers config parsing, object resolution, the Livestatus/LQL engine (query parsing, filters, stats, sorting, output formatting), external command dispatch, macro expansion, perfdata processing, scheduling, flap detection, dependency evaluation, freshness checking, downtime handling, notifications, and status file generation. All tests are pure unit tests with no network I/O, no disk I/O (outside of `t.TempDir()`), and no external dependencies.
+The test suite covers config parsing, object resolution, the Livestatus/LQL engine (query parsing, filters, stats, sorting, output formatting), external command dispatch, macro expansion, perfdata processing, scheduling, flap detection, dependency evaluation, freshness checking, downtime handling, notifications, status file generation, and the NRDP relay (payload parsing, auth, dynamic registration, TTL pruning). All tests are pure unit tests with no network I/O, no disk I/O (outside of `t.TempDir()`), and no external dependencies.
 
 ---
 
@@ -747,6 +939,7 @@ The test suite covers config parsing, object resolution, the Livestatus/LQL engi
 1. Build Gogios
 2. Point it at your existing `nagios.cfg`
 3. Add `livestatus_tcp=0.0.0.0:6557` to your config (or `query_socket` for Unix socket)
+3b. (Optional) Add `nrdp_listen=0.0.0.0:5668` + `nrdp_token_hash=...` for NRDP passive check ingestion
 4. Run `./gogios -v /etc/nagios/nagios.cfg` to validate
 5. Stop Nagios
 6. Start Gogios

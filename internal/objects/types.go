@@ -335,6 +335,10 @@ type Host struct {
 
 	// Notification-related config
 	CheckType int
+
+	// Dynamic NRDP objects
+	Dynamic  bool      // true if auto-created via NRDP, eligible for TTL pruning
+	LastSeen time.Time // last time a passive check was received (for TTL pruning)
 }
 
 type HostGroup struct {
@@ -452,6 +456,10 @@ type Service struct {
 	IsBeingFreshened bool
 
 	CheckType int
+
+	// Dynamic NRDP objects
+	Dynamic  bool      // true if auto-created via NRDP, eligible for TTL pruning
+	LastSeen time.Time // last time a passive check was received (for TTL pruning)
 }
 
 // CheckResult carries the result of a plugin execution back to the main loop.
