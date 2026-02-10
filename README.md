@@ -608,6 +608,34 @@ Requires **Go 1.25.6+**. No external dependencies.
 
 ---
 
+## Testing
+
+```bash
+# Run the full test suite
+go test ./...
+
+# Verbose output (see every test name and result)
+go test ./... -v
+
+# Run tests for a specific package
+go test ./internal/api/livestatus/...
+go test ./internal/config/...
+
+# Run a specific test by name
+go test ./internal/extcmd -run TestParse
+
+# Race detector (slower, but catches concurrency bugs)
+go test -race ./...
+
+# With coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out    # open in browser
+```
+
+The test suite covers config parsing, object resolution, the Livestatus/LQL engine (query parsing, filters, stats, sorting, output formatting), external command dispatch, macro expansion, perfdata processing, scheduling, flap detection, dependency evaluation, freshness checking, downtime handling, notifications, and status file generation. All tests are pure unit tests with no network I/O, no disk I/O (outside of `t.TempDir()`), and no external dependencies.
+
+---
+
 ## Migration from Nagios
 
 1. Build Gogios
