@@ -30,6 +30,7 @@ func main() {
 	// Nagios-compatible flags
 	var verifyCount int
 	var daemonMode, testScheduling, enableTimingPoint bool
+	var verboseChecks, verboseLivestatus bool
 
 	// Manual arg parsing to support -v -v (double verbose) like Nagios
 	var configFile string
@@ -45,6 +46,10 @@ func main() {
 			daemonMode = true
 		case "-T", "--enable-timing-point":
 			enableTimingPoint = true
+		case "--verbose-checks":
+			verboseChecks = true
+		case "--verbose-livestatus":
+			verboseLivestatus = true
 		case "-h", "--help":
 			printUsage()
 			os.Exit(0)
@@ -99,7 +104,15 @@ func main() {
 
 	_ = enableTimingPoint // reserved for future use
 
-	runDaemon(configFile, daemonMode)
+	var verbosity int
+	if verboseChecks {
+		verbosity |= logging.VerboseChecks
+	}
+	if verboseLivestatus {
+		verbosity |= logging.VerboseLivestatus
+	}
+
+	runDaemon(configFile, daemonMode, verbosity)
 }
 
 func printUsage() {
@@ -116,6 +129,8 @@ func printUsage() {
 	fmt.Println("                               diagnostic info based on the current configuration files.")
 	fmt.Println("  -T, --enable-timing-point     Enable timed commentary on initialization")
 	fmt.Println("  -d, --daemon                  Starts Gogios in daemon mode, instead of as a foreground process")
+	fmt.Println("      --verbose-checks          Log every check result (host/service, state, output)")
+	fmt.Println("      --verbose-livestatus      Log every Livestatus query and command")
 	fmt.Println("  -V, --version                 Print version information")
 	fmt.Println("  -h, --help                    Print this help message")
 	fmt.Println()
@@ -282,7 +297,7 @@ func runSchedulingTest(configFile string) {
 	fmt.Println()
 }
 
-func runDaemon(configFile string, daemonMode bool) {
+func runDaemon(configFile string, daemonMode bool, verbosity int) {
 	if !daemonMode {
 		fmt.Printf("\nGogios %s\n", version)
 		fmt.Println("Copyright (c) 2024-present Gogios Contributors")
@@ -405,6 +420,9 @@ func runDaemon(configFile string, daemonMode bool) {
 	if !daemonMode {
 		nagLogger.SetStdout(true)
 	}
+
+	// Set verbosity flags from CLI
+	nagLogger.Verbosity = verbosity
 
 	nagLogger.Log("Gogios %s starting... (PID=%d)", version, os.Getpid())
 	nagLogger.Log("Local time is %s", time.Now().Format("Mon Jan 02 15:04:05 MST 2006"))
@@ -557,6 +575,11 @@ func runDaemon(configFile string, daemonMode bool) {
 			svcHandler.HandleResult(svc, cr)
 			sched.DecrementRunningServiceChecks()
 
+			nagLogger.LogVerbose(logging.VerboseChecks, "CHECK RESULT: %s;%s;%s;%d;%.3fs;%s",
+				cr.HostName, cr.ServiceDescription,
+				objects.ServiceStateName(svc.CurrentState),
+				cr.ReturnCode, cr.FinishTime.Sub(cr.StartTime).Seconds(), cr.Output)
+
 			// Check if a flexible downtime should start
 			downtimeMgr.CheckPendingFlexServiceDowntime(cr.HostName, cr.ServiceDescription, svc.CurrentState)
 
@@ -574,6 +597,10 @@ func runDaemon(configFile string, daemonMode bool) {
 				return
 			}
 			hostHandler.HandleResult(host, cr)
+
+			nagLogger.LogVerbose(logging.VerboseChecks, "CHECK RESULT: %s;%s;%d;%.3fs;%s",
+				cr.HostName, objects.HostStateName(host.CurrentState),
+				cr.ReturnCode, cr.FinishTime.Sub(cr.StartTime).Seconds(), cr.Output)
 
 			// Check if a flexible downtime should start
 			downtimeMgr.CheckPendingFlexHostDowntime(cr.HostName, host.CurrentState)
@@ -646,7 +673,8 @@ func runDaemon(configFile string, daemonMode bool) {
 			Comments:  commentMgr,
 			Downtimes: downtimeMgr,
 			Logger:    nagLogger,
-			LogFile:   mainCfg.LogFile,
+			LogFile:        mainCfg.LogFile,
+			LogArchivePath: mainCfg.LogArchivePath,
 		}
 		cmdSink := api.CommandSink(func(name string, args []string) {
 			if cmdProcessor != nil {

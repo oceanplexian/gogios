@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/oceanplexian/gogios/internal/api"
+	"github.com/oceanplexian/gogios/internal/logging"
 )
 
 // Server is the Livestatus query server. It listens on a Unix domain socket
@@ -110,6 +111,17 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 
+		// Handle COMMAND before parsing as query — COMMANDs have no headers
+		firstLine := strings.SplitN(strings.TrimSpace(request), "\n", 2)[0]
+		if strings.HasPrefix(firstLine, "COMMAND ") {
+			if s.provider.Logger != nil {
+				s.provider.Logger.LogVerbose(logging.VerboseLivestatus, "LIVESTATUS: %s from %s", firstLine, conn.RemoteAddr())
+			}
+			handleCommand(firstLine, s.cmdSink)
+			// Per spec: commands are fire-and-forget, no response
+			return
+		}
+
 		q, err := ParseQuery(request)
 		if err != nil {
 			writeError(conn, q, fmt.Sprintf("Invalid query: %v", err))
@@ -119,13 +131,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		// Handle COMMAND
-		if strings.HasPrefix(request, "COMMAND ") {
-			handleCommand(request, s.cmdSink)
-			if q.KeepAlive {
-				continue
-			}
-			return
+		if s.provider.Logger != nil {
+			s.provider.Logger.LogVerbose(logging.VerboseLivestatus, "LIVESTATUS: GET %s (Columns: %d) (Filters: %d) from %s",
+				q.Table, len(q.Columns), len(q.Filters), conn.RemoteAddr())
 		}
 
 		response := ExecuteQuery(q, s.provider)

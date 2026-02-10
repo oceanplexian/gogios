@@ -1,0 +1,19 @@
+#!/bin/sh
+# check_procs_simple <warn> <crit>
+# Checks total process count. Returns perfdata.
+WARN="${1:-250}"
+CRIT="${2:-400}"
+
+COUNT=$(ps -e | wc -l | tr -d ' ')
+COUNT=$(( COUNT - 1 ))  # subtract header line
+
+if [ "$COUNT" -ge "$CRIT" ]; then
+  echo "PROCS CRITICAL: ${COUNT} processes | procs=${COUNT};${WARN};${CRIT};0;"
+  exit 2
+elif [ "$COUNT" -ge "$WARN" ]; then
+  echo "PROCS WARNING: ${COUNT} processes | procs=${COUNT};${WARN};${CRIT};0;"
+  exit 1
+else
+  echo "PROCS OK: ${COUNT} processes | procs=${COUNT};${WARN};${CRIT};0;"
+  exit 0
+fi

@@ -2,21 +2,22 @@ package livestatus
 
 import (
 	"math"
+	"time"
 
 	"github.com/oceanplexian/gogios/internal/api"
 )
 
 // evaluateStats computes stats results for a set of rows that already passed filters.
-func evaluateStats(stats []*StatsExpr, rows []interface{}, table *Table) []float64 {
+func evaluateStats(stats []*StatsExpr, rows []interface{}, table *Table, provider *api.StateProvider) []float64 {
 	results := make([]float64, len(stats))
 
 	for i, s := range stats {
 		if len(s.SubStats) > 0 {
-			results[i] = evaluateCompoundStat(s, rows, table)
+			results[i] = evaluateCompoundStat(s, rows, table, provider)
 		} else if s.Function != "" {
-			results[i] = evaluateAggStat(s, rows, table)
+			results[i] = evaluateAggStat(s, rows, table, provider)
 		} else {
-			results[i] = evaluateFilterStat(s, rows, table)
+			results[i] = evaluateFilterStat(s, rows, table, provider)
 		}
 	}
 
@@ -24,14 +25,14 @@ func evaluateStats(stats []*StatsExpr, rows []interface{}, table *Table) []float
 }
 
 // evaluateFilterStat counts rows matching a filter-style stat.
-func evaluateFilterStat(s *StatsExpr, rows []interface{}, table *Table) float64 {
+func evaluateFilterStat(s *StatsExpr, rows []interface{}, table *Table, provider *api.StateProvider) float64 {
 	count := 0.0
 	col := table.Columns[s.Column]
 	if col == nil {
 		return 0
 	}
 	for _, row := range rows {
-		if compareValue(col.Extract(row), s.Operator, s.Value) {
+		if compareValue(col.ExtractValue(row, provider), s.Operator, s.Value) {
 			count++
 		}
 	}
@@ -39,7 +40,7 @@ func evaluateFilterStat(s *StatsExpr, rows []interface{}, table *Table) float64 
 }
 
 // evaluateAggStat computes an aggregate function over a column.
-func evaluateAggStat(s *StatsExpr, rows []interface{}, table *Table) float64 {
+func evaluateAggStat(s *StatsExpr, rows []interface{}, table *Table, provider *api.StateProvider) float64 {
 	col := table.Columns[s.Column]
 	if col == nil {
 		return 0
@@ -47,7 +48,7 @@ func evaluateAggStat(s *StatsExpr, rows []interface{}, table *Table) float64 {
 
 	var vals []float64
 	for _, row := range rows {
-		v := col.Extract(row)
+		v := col.ExtractValue(row, provider)
 		vals = append(vals, toFloat64(v))
 	}
 	if len(vals) == 0 {
@@ -102,10 +103,10 @@ func evaluateAggStat(s *StatsExpr, rows []interface{}, table *Table) float64 {
 }
 
 // evaluateCompoundStat evaluates StatsAnd/StatsOr combinations.
-func evaluateCompoundStat(s *StatsExpr, rows []interface{}, table *Table) float64 {
+func evaluateCompoundStat(s *StatsExpr, rows []interface{}, table *Table, provider *api.StateProvider) float64 {
 	count := 0.0
 	for _, row := range rows {
-		match := evaluateCompoundStatRow(s, row, table)
+		match := evaluateCompoundStatRow(s, row, table, provider)
 		if match {
 			count++
 		}
@@ -114,10 +115,10 @@ func evaluateCompoundStat(s *StatsExpr, rows []interface{}, table *Table) float6
 }
 
 // evaluateCompoundStatRow checks if a single row matches a compound stat.
-func evaluateCompoundStatRow(s *StatsExpr, row interface{}, table *Table) bool {
+func evaluateCompoundStatRow(s *StatsExpr, row interface{}, table *Table, provider *api.StateProvider) bool {
 	if s.IsAnd {
 		for _, sub := range s.SubStats {
-			if !statRowMatch(sub, row, table) {
+			if !statRowMatch(sub, row, table, provider) {
 				return false
 			}
 		}
@@ -125,7 +126,7 @@ func evaluateCompoundStatRow(s *StatsExpr, row interface{}, table *Table) bool {
 	}
 	// Or
 	for _, sub := range s.SubStats {
-		if statRowMatch(sub, row, table) {
+		if statRowMatch(sub, row, table, provider) {
 			return true
 		}
 	}
@@ -133,15 +134,15 @@ func evaluateCompoundStatRow(s *StatsExpr, row interface{}, table *Table) bool {
 }
 
 // statRowMatch checks if a single row matches a single stat expression.
-func statRowMatch(s *StatsExpr, row interface{}, table *Table) bool {
+func statRowMatch(s *StatsExpr, row interface{}, table *Table, provider *api.StateProvider) bool {
 	if len(s.SubStats) > 0 {
-		return evaluateCompoundStatRow(s, row, table)
+		return evaluateCompoundStatRow(s, row, table, provider)
 	}
 	col := table.Columns[s.Column]
 	if col == nil {
 		return false
 	}
-	return compareValue(col.Extract(row), s.Operator, s.Value)
+	return compareValue(col.ExtractValue(row, provider), s.Operator, s.Value)
 }
 
 func toFloat64(v interface{}) float64 {
@@ -157,6 +158,11 @@ func toFloat64(v interface{}) float64 {
 			return 1
 		}
 		return 0
+	case time.Time:
+		if val.IsZero() {
+			return 0
+		}
+		return float64(val.Unix())
 	default:
 		return 0
 	}
@@ -177,7 +183,7 @@ func evaluateStatsGroupBy(q *Query, stats []*StatsExpr, rows []interface{}, tabl
 				keyParts = append(keyParts, "")
 				continue
 			}
-			v := c.Extract(row)
+			v := c.ExtractValue(row, provider)
 			keyParts = append(keyParts, formatValue(v))
 		}
 		key := groupKey(joinKey(keyParts))
@@ -190,7 +196,7 @@ func evaluateStatsGroupBy(q *Query, stats []*StatsExpr, rows []interface{}, tabl
 	var result [][]interface{}
 	for _, key := range keyOrder {
 		groupRows := groups[key]
-		statResults := evaluateStats(stats, groupRows, table)
+		statResults := evaluateStats(stats, groupRows, table, provider)
 
 		// Build result row: column values + stat values
 		var resultRow []interface{}
@@ -202,7 +208,7 @@ func evaluateStatsGroupBy(q *Query, stats []*StatsExpr, rows []interface{}, tabl
 					resultRow = append(resultRow, "")
 					continue
 				}
-				resultRow = append(resultRow, c.Extract(groupRows[0]))
+				resultRow = append(resultRow, c.ExtractValue(groupRows[0], provider))
 			}
 		}
 		for _, sv := range statResults {

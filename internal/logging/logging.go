@@ -13,6 +13,12 @@ import (
 	"github.com/oceanplexian/gogios/internal/objects"
 )
 
+// Verbosity bitmask flags for selective verbose logging.
+const (
+	VerboseChecks     = 1 << 0 // Log every check result
+	VerboseLivestatus = 1 << 1 // Log every livestatus query
+)
+
 // Logger handles Nagios log output with rotation support.
 type Logger struct {
 	mu             sync.Mutex
@@ -24,6 +30,7 @@ type Logger struct {
 	useStdout      bool
 	syslogWriter   *syslog.Writer
 	global         *objects.GlobalState
+	Verbosity      int
 }
 
 // NewLogger creates a new Nagios logger.
@@ -91,6 +98,14 @@ func (l *Logger) Log(format string, args ...interface{}) {
 	if l.useSyslog && l.syslogWriter != nil {
 		l.syslogWriter.Info(msg)
 	}
+}
+
+// LogVerbose writes a log message only if the given verbosity flag is enabled.
+func (l *Logger) LogVerbose(flag int, format string, args ...interface{}) {
+	if l.Verbosity&flag == 0 {
+		return
+	}
+	l.Log(format, args...)
 }
 
 // LogServiceAlert logs a service state change alert.

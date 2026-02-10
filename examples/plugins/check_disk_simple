@@ -1,0 +1,31 @@
+#!/bin/sh
+# check_disk_simple <mount> <warn_%> <crit_%>
+# Checks disk usage with df. Returns perfdata.
+MOUNT="${1:-/}"
+WARN="${2:-80}"
+CRIT="${3:-90}"
+
+LINE=$(df -P "$MOUNT" 2>/dev/null | tail -1)
+if [ -z "$LINE" ]; then
+  echo "DISK UNKNOWN - Could not stat filesystem ${MOUNT}"
+  exit 3
+fi
+
+PCT=$(echo "$LINE" | awk '{gsub(/%/,""); print $5}')
+AVAIL=$(echo "$LINE" | awk '{print $4}')
+TOTAL=$(echo "$LINE" | awk '{print $2}')
+
+# Convert to MB
+AVAIL_MB=$(( AVAIL / 1024 ))
+TOTAL_MB=$(( TOTAL / 1024 ))
+
+if [ "$PCT" -ge "$CRIT" ]; then
+  echo "DISK CRITICAL - ${MOUNT} ${PCT}% used (${AVAIL_MB} MB free of ${TOTAL_MB} MB) | ${MOUNT}=${PCT}%;${WARN};${CRIT};0;100"
+  exit 2
+elif [ "$PCT" -ge "$WARN" ]; then
+  echo "DISK WARNING - ${MOUNT} ${PCT}% used (${AVAIL_MB} MB free of ${TOTAL_MB} MB) | ${MOUNT}=${PCT}%;${WARN};${CRIT};0;100"
+  exit 1
+else
+  echo "DISK OK - ${MOUNT} ${PCT}% used (${AVAIL_MB} MB free of ${TOTAL_MB} MB) | ${MOUNT}=${PCT}%;${WARN};${CRIT};0;100"
+  exit 0
+fi

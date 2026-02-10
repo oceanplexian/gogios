@@ -1,0 +1,35 @@
+#!/bin/sh
+# check_ping_simple <host> <warn_rta_ms> <crit_rta_ms>
+# A real ping check. Returns perfdata. Works on macOS and Linux.
+HOST="${1:?Usage: check_ping_simple <host> [warn_ms] [crit_ms]}"
+WARN="${2:-100}"
+CRIT="${3:-500}"
+
+OUTPUT=$(ping -c 3 -W 2 "$HOST" 2>&1)
+RC=$?
+
+if [ $RC -ne 0 ]; then
+  echo "PING CRITICAL - ${HOST} unreachable | rta=0ms;${WARN};${CRIT};0; pl=100%;80;100;;"
+  exit 2
+fi
+
+# Parse RTA from ping output (handles both macOS and Linux formats)
+RTA=$(echo "$OUTPUT" | grep 'avg' | sed -E 's|.*/([0-9.]+)/.*|\1|')
+LOSS=$(echo "$OUTPUT" | grep -oE '[0-9.]+% packet loss' | grep -oE '[0-9.]+')
+
+RTA_INT=${RTA%.*}
+LOSS_INT=${LOSS%.*}
+
+if [ "${LOSS_INT:-0}" -ge 80 ]; then
+  echo "PING CRITICAL - Packet loss = ${LOSS}%, RTA = ${RTA} ms | rta=${RTA}ms;${WARN};${CRIT};0; pl=${LOSS}%;80;100;;"
+  exit 2
+elif [ "${RTA_INT:-0}" -ge "$CRIT" ]; then
+  echo "PING CRITICAL - RTA = ${RTA} ms | rta=${RTA}ms;${WARN};${CRIT};0; pl=${LOSS}%;80;100;;"
+  exit 2
+elif [ "${RTA_INT:-0}" -ge "$WARN" ] || [ "${LOSS_INT:-0}" -ge 20 ]; then
+  echo "PING WARNING - Packet loss = ${LOSS}%, RTA = ${RTA} ms | rta=${RTA}ms;${WARN};${CRIT};0; pl=${LOSS}%;80;100;;"
+  exit 1
+else
+  echo "PING OK - Packet loss = ${LOSS}%, RTA = ${RTA} ms | rta=${RTA}ms;${WARN};${CRIT};0; pl=${LOSS}%;80;100;;"
+  exit 0
+fi

@@ -1,0 +1,48 @@
+#!/bin/sh
+# check_swap_simple <warn_%> <crit_%>
+# Checks swap usage. Works on macOS and Linux.
+WARN="${1:-50}"
+CRIT="${2:-80}"
+
+OS=$(uname -s)
+case "$OS" in
+  Darwin)
+    # macOS: parse sysctl
+    SWAPUSAGE=$(sysctl -n vm.swapusage 2>/dev/null)
+    if [ -z "$SWAPUSAGE" ]; then
+      echo "SWAP OK - no swap configured | swap_used=0%;${WARN};${CRIT};0;100"
+      exit 0
+    fi
+    TOTAL=$(echo "$SWAPUSAGE" | grep -oE 'total = [0-9.]+' | awk '{print $3}')
+    USED=$(echo "$SWAPUSAGE" | grep -oE 'used = [0-9.]+' | awk '{print $3}')
+    TOTAL_INT=${TOTAL%.*}
+    USED_INT=${USED%.*}
+    ;;
+  Linux)
+    LINE=$(free -m | grep Swap)
+    TOTAL_INT=$(echo "$LINE" | awk '{print $2}')
+    USED_INT=$(echo "$LINE" | awk '{print $3}')
+    ;;
+  *)
+    echo "SWAP UNKNOWN - unsupported OS: ${OS}"
+    exit 3
+    ;;
+esac
+
+if [ "${TOTAL_INT:-0}" -eq 0 ]; then
+  echo "SWAP OK - no swap configured | swap_used=0%;${WARN};${CRIT};0;100"
+  exit 0
+fi
+
+PCT=$(( USED_INT * 100 / TOTAL_INT ))
+
+if [ "$PCT" -ge "$CRIT" ]; then
+  echo "SWAP CRITICAL - ${PCT}% used (${USED_INT} MB of ${TOTAL_INT} MB) | swap_used=${PCT}%;${WARN};${CRIT};0;100"
+  exit 2
+elif [ "$PCT" -ge "$WARN" ]; then
+  echo "SWAP WARNING - ${PCT}% used (${USED_INT} MB of ${TOTAL_INT} MB) | swap_used=${PCT}%;${WARN};${CRIT};0;100"
+  exit 1
+else
+  echo "SWAP OK - ${PCT}% used (${USED_INT} MB of ${TOTAL_INT} MB) | swap_used=${PCT}%;${WARN};${CRIT};0;100"
+  exit 0
+fi

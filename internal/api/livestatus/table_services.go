@@ -1,6 +1,8 @@
 package livestatus
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,15 +185,47 @@ func servicesTable() *Table {
 			"in_notification_period": {Name: "in_notification_period", Type: "int", Extract: func(r interface{}) interface{} { return 1 }},
 			"comments": {Name: "comments", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				svc := r.(*objects.Service)
+				ids := make([]string, 0)
+				for _, c := range p.Comments.ForService(svc.Host.Name, svc.Description) {
+					ids = append(ids, strconv.FormatUint(c.CommentID, 10))
+				}
+				return ids
 			}},
 			"downtimes": {Name: "downtimes", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				svc := r.(*objects.Service)
+				ids := make([]string, 0)
+				for _, d := range p.Downtimes.All() {
+					if d.Type == objects.ServiceDowntimeType && d.HostName == svc.Host.Name && d.ServiceDescription == svc.Description {
+						ids = append(ids, strconv.FormatUint(d.DowntimeID, 10))
+					}
+				}
+				return ids
 			}},
 			"comments_with_info": {Name: "comments_with_info", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				svc := r.(*objects.Service)
+				infos := make([]string, 0)
+				for _, c := range p.Comments.ForService(svc.Host.Name, svc.Description) {
+					infos = append(infos, fmt.Sprintf("%d|%d|%s|%s", c.CommentID, c.EntryType, c.Author, c.Data))
+				}
+				return infos
 			}},
 			"downtimes_with_info": {Name: "downtimes_with_info", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				svc := r.(*objects.Service)
+				infos := make([]string, 0)
+				for _, d := range p.Downtimes.All() {
+					if d.Type == objects.ServiceDowntimeType && d.HostName == svc.Host.Name && d.ServiceDescription == svc.Description {
+						infos = append(infos, fmt.Sprintf("%d|%s|%s", d.DowntimeID, d.Author, d.Comment))
+					}
+				}
+				return infos
 			}},
 			"hard_state": {Name: "hard_state", Type: "int", Extract: func(r interface{}) interface{} { return r.(*objects.Service).LastHardState }},
 			"last_update": {Name: "last_update", Type: "time", Extract: func(r interface{}) interface{} { return time.Now() }},
@@ -231,6 +265,13 @@ func servicesTable() *Table {
 			}},
 			"host_comments": {Name: "host_comments", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				svc := r.(*objects.Service)
+				ids := make([]string, 0)
+				for _, c := range p.Comments.ForHost(svc.Host.Name) {
+					ids = append(ids, strconv.FormatUint(c.CommentID, 10))
+				}
+				return ids
 			}},
 			"host_contacts": {Name: "host_contacts", Type: "list", Extract: func(r interface{}) interface{} {
 				names := make([]string, 0)

@@ -3,10 +3,13 @@ package livestatus
 import (
 	"fmt"
 	"sort"
+	"time"
+
+	"github.com/oceanplexian/gogios/internal/api"
 )
 
 // sortRows sorts rows in place according to the query's Sort directives.
-func sortRows(rows []interface{}, q *Query, table *Table) {
+func sortRows(rows []interface{}, q *Query, table *Table, provider *api.StateProvider) {
 	if len(q.Sort) == 0 {
 		return
 	}
@@ -17,8 +20,8 @@ func sortRows(rows []interface{}, q *Query, table *Table) {
 			if col == nil {
 				continue
 			}
-			vi := col.Extract(rows[i])
-			vj := col.Extract(rows[j])
+			vi := col.ExtractValue(rows[i], provider)
+			vj := col.ExtractValue(rows[j], provider)
 			cmp := compareValues(vi, vj)
 			if cmp == 0 {
 				continue
@@ -80,6 +83,18 @@ func compareValues(a, b interface{}) int {
 			return -1
 		}
 		if va > vb {
+			return 1
+		}
+		return 0
+	case time.Time:
+		vb, ok := b.(time.Time)
+		if !ok {
+			return 0
+		}
+		if va.Before(vb) {
+			return -1
+		}
+		if va.After(vb) {
 			return 1
 		}
 		return 0

@@ -8,6 +8,17 @@ type Column struct {
 	Description string
 	Type        string // "int", "float", "string", "time", "list"
 	Extract     func(row interface{}) interface{}
+	// ProviderExtract is used for columns that need access to the StateProvider
+	// (e.g. comments/downtimes lists that require lookups against managers).
+	ProviderExtract func(row interface{}, p *api.StateProvider) interface{}
+}
+
+// ExtractValue returns the column value, using ProviderExtract if available.
+func (c *Column) ExtractValue(row interface{}, p *api.StateProvider) interface{} {
+	if c.ProviderExtract != nil {
+		return c.ProviderExtract(row, p)
+	}
+	return c.Extract(row)
 }
 
 // Table describes a livestatus table with its columns and row retrieval.

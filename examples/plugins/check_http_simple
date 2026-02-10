@@ -1,0 +1,40 @@
+#!/bin/sh
+# check_http_simple <host_or_url> <warn_secs> <crit_secs>
+# Checks HTTP response with curl. Returns perfdata.
+TARGET="${1:?Usage: check_http_simple <host_or_url> [warn_secs] [crit_secs]}"
+WARN="${2:-2}"
+CRIT="${3:-5}"
+
+# Add http:// if no scheme present
+case "$TARGET" in
+  http://*|https://*) URL="$TARGET" ;;
+  *) URL="http://${TARGET}" ;;
+esac
+
+OUTPUT=$(curl -sS -o /dev/null -w "%{http_code} %{time_total} %{size_download}" --max-time "$CRIT" "$URL" 2>&1)
+RC=$?
+
+if [ $RC -ne 0 ]; then
+  echo "HTTP CRITICAL - ${OUTPUT} | time=0s;${WARN};${CRIT};0; size=0B;;;0"
+  exit 2
+fi
+
+CODE=$(echo "$OUTPUT" | awk '{print $1}')
+TIME=$(echo "$OUTPUT" | awk '{print $2}')
+SIZE=$(echo "$OUTPUT" | awk '{print $3}')
+TIME_INT=${TIME%.*}
+TIME_INT=${TIME_INT:-0}
+
+if [ "$CODE" -ge 400 ]; then
+  echo "HTTP CRITICAL - Status ${CODE}, ${TIME}s response, ${SIZE} bytes | time=${TIME}s;${WARN};${CRIT};0; size=${SIZE}B;;;0"
+  exit 2
+elif [ "$TIME_INT" -ge "$CRIT" ]; then
+  echo "HTTP CRITICAL - Timeout after ${TIME}s | time=${TIME}s;${WARN};${CRIT};0; size=${SIZE}B;;;0"
+  exit 2
+elif [ "$TIME_INT" -ge "$WARN" ]; then
+  echo "HTTP WARNING - Slow response ${TIME}s, status ${CODE} | time=${TIME}s;${WARN};${CRIT};0; size=${SIZE}B;;;0"
+  exit 1
+else
+  echo "HTTP OK: Status ${CODE}, ${TIME}s response, ${SIZE} bytes | time=${TIME}s;${WARN};${CRIT};0; size=${SIZE}B;;;0"
+  exit 0
+fi

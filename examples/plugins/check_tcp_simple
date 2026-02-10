@@ -1,0 +1,20 @@
+#!/bin/sh
+# check_tcp_simple <host> <port> <timeout>
+# Checks if a TCP port is open using nc. Returns perfdata.
+HOST="${1:?Usage: check_tcp_simple <host> <port> [timeout]}"
+PORT="${2:?Usage: check_tcp_simple <host> <port> [timeout]}"
+TIMEOUT="${3:-5}"
+
+START=$(date +%s)
+nc -z -w "$TIMEOUT" "$HOST" "$PORT" >/dev/null 2>&1
+RC=$?
+END=$(date +%s)
+ELAPSED=$(( END - START ))
+
+if [ $RC -eq 0 ]; then
+  echo "TCP OK - ${ELAPSED}s response time on port ${PORT} | time=${ELAPSED}s;;;0;${TIMEOUT}"
+  exit 0
+else
+  echo "TCP CRITICAL - Connection refused on port ${PORT} | time=${TIMEOUT}s;;;0;${TIMEOUT}"
+  exit 2
+fi

@@ -2,6 +2,7 @@ package livestatus
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -213,15 +214,47 @@ func hostsTable() *Table {
 			"in_notification_period": {Name: "in_notification_period", Type: "int", Extract: func(r interface{}) interface{} { return 1 }},
 			"comments": {Name: "comments", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				h := r.(*objects.Host)
+				ids := make([]string, 0)
+				for _, c := range p.Comments.ForHost(h.Name) {
+					ids = append(ids, strconv.FormatUint(c.CommentID, 10))
+				}
+				return ids
 			}},
 			"downtimes": {Name: "downtimes", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				h := r.(*objects.Host)
+				ids := make([]string, 0)
+				for _, d := range p.Downtimes.All() {
+					if d.Type == objects.HostDowntimeType && d.HostName == h.Name {
+						ids = append(ids, strconv.FormatUint(d.DowntimeID, 10))
+					}
+				}
+				return ids
 			}},
 			"comments_with_info": {Name: "comments_with_info", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				h := r.(*objects.Host)
+				infos := make([]string, 0)
+				for _, c := range p.Comments.ForHost(h.Name) {
+					infos = append(infos, fmt.Sprintf("%d|%d|%s|%s", c.CommentID, c.EntryType, c.Author, c.Data))
+				}
+				return infos
 			}},
 			"downtimes_with_info": {Name: "downtimes_with_info", Type: "list", Extract: func(r interface{}) interface{} {
 				return make([]string, 0)
+			}, ProviderExtract: func(r interface{}, p *api.StateProvider) interface{} {
+				h := r.(*objects.Host)
+				infos := make([]string, 0)
+				for _, d := range p.Downtimes.All() {
+					if d.Type == objects.HostDowntimeType && d.HostName == h.Name {
+						infos = append(infos, fmt.Sprintf("%d|%s|%s", d.DowntimeID, d.Author, d.Comment))
+					}
+				}
+				return infos
 			}},
 			"services": {Name: "services", Type: "list", Extract: func(r interface{}) interface{} {
 				names := make([]string, 0)

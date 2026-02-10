@@ -3,6 +3,8 @@ package livestatus
 import (
 	"bufio"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +34,7 @@ func logTable() *Table {
 			if p.LogFile == "" {
 				return nil
 			}
-			entries := parseLogFile(p.LogFile)
+			entries := loadAllLogs(p.LogFile, p.LogArchivePath)
 			rows := make([]interface{}, len(entries))
 			for i, e := range entries {
 				rows[i] = e
@@ -75,6 +77,35 @@ func logTable() *Table {
 			}},
 		},
 	}
+}
+
+// loadAllLogs reads the current log file and any archived logs.
+func loadAllLogs(logFile, archivePath string) []*logEntry {
+	var entries []*logEntry
+
+	// Read archived logs first (older entries)
+	if archivePath != "" {
+		archiveFiles := findArchiveFiles(archivePath)
+		for _, af := range archiveFiles {
+			entries = append(entries, parseLogFile(af)...)
+		}
+	}
+
+	// Read current log file (newest entries)
+	entries = append(entries, parseLogFile(logFile)...)
+
+	return entries
+}
+
+// findArchiveFiles returns sorted archive log file paths (oldest first).
+func findArchiveFiles(archivePath string) []string {
+	matches, err := filepath.Glob(filepath.Join(archivePath, "*.log"))
+	if err != nil {
+		return nil
+	}
+	// Sort by filename so older archives come first
+	sort.Strings(matches)
+	return matches
 }
 
 func parseLogFile(path string) []*logEntry {
@@ -148,6 +179,10 @@ func parseLogLine(line string) *logEntry {
 		parseDowntimeAlert(e, detail, true)
 	case "SERVICE DOWNTIME ALERT":
 		parseDowntimeAlert(e, detail, false)
+	case "HOST FLAPPING ALERT":
+		parseFlappingAlert(e, detail, true)
+	case "SERVICE FLAPPING ALERT":
+		parseFlappingAlert(e, detail, false)
 	case "EXTERNAL COMMAND":
 		e.Options = detail
 	}
@@ -214,6 +249,20 @@ func parseServiceNotification(e *logEntry, detail string) {
 }
 
 func parseDowntimeAlert(e *logEntry, detail string, isHost bool) {
+	parts := strings.SplitN(detail, ";", 4)
+	if len(parts) < 2 {
+		return
+	}
+	e.HostName = parts[0]
+	if !isHost && len(parts) >= 3 {
+		e.ServiceDescription = parts[1]
+		e.Options = parts[2]
+	} else if len(parts) >= 2 {
+		e.Options = parts[1]
+	}
+}
+
+func parseFlappingAlert(e *logEntry, detail string, isHost bool) {
 	parts := strings.SplitN(detail, ";", 4)
 	if len(parts) < 2 {
 		return

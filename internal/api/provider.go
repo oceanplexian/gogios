@@ -12,8 +12,9 @@ type StateProvider struct {
 	Global    *objects.GlobalState
 	Comments  *downtime.CommentManager
 	Downtimes *downtime.DowntimeManager
-	Logger    *logging.Logger
-	LogFile   string
+	Logger         *logging.Logger
+	LogFile        string
+	LogArchivePath string
 }
 
 // CommandSink is a callback for executing external commands from the API.

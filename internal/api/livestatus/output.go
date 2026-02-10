@@ -21,7 +21,7 @@ func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 	// Apply filters
 	var filtered []interface{}
 	for _, row := range rows {
-		if evaluateFilters(q.Filters, row, table) {
+		if evaluateFilters(q.Filters, row, table, provider) {
 			filtered = append(filtered, row)
 		}
 	}
@@ -32,7 +32,7 @@ func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 	}
 
 	// Sort
-	sortRows(filtered, q, table)
+	sortRows(filtered, q, table, provider)
 
 	// Offset
 	if q.Offset > 0 {
@@ -67,7 +67,7 @@ func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 				resultRow = append(resultRow, "")
 				continue
 			}
-			resultRow = append(resultRow, col.Extract(row))
+			resultRow = append(resultRow, col.ExtractValue(row, provider))
 		}
 		resultRows = append(resultRows, resultRow)
 	}
@@ -87,7 +87,7 @@ func formatStatsResponse(q *Query, filtered []interface{}, table *Table, provide
 	}
 
 	// Ungrouped stats
-	results := evaluateStats(q.Stats, filtered, table)
+	results := evaluateStats(q.Stats, filtered, table, provider)
 	var row []interface{}
 	for _, v := range results {
 		row = append(row, v)

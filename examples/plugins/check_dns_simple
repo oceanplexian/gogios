@@ -1,0 +1,28 @@
+#!/bin/sh
+# check_dns_simple <hostname> <expected_address>
+# Resolves a hostname and optionally validates the result.
+HOSTNAME="${1:?Usage: check_dns_simple <hostname> [expected_address]}"
+EXPECTED="$2"
+
+OUTPUT=$(host "$HOSTNAME" 2>&1)
+RC=$?
+
+if [ $RC -ne 0 ]; then
+  echo "DNS CRITICAL - lookup failed for ${HOSTNAME}: ${OUTPUT}"
+  exit 2
+fi
+
+ADDRESS=$(echo "$OUTPUT" | grep 'has address' | head -1 | awk '{print $NF}')
+
+if [ -z "$ADDRESS" ]; then
+  echo "DNS CRITICAL - No A record found for ${HOSTNAME}"
+  exit 2
+fi
+
+if [ -n "$EXPECTED" ] && [ "$ADDRESS" != "$EXPECTED" ]; then
+  echo "DNS WARNING - ${HOSTNAME} resolves to ${ADDRESS}, expected ${EXPECTED}"
+  exit 1
+fi
+
+echo "DNS OK - ${HOSTNAME} resolves to ${ADDRESS}"
+exit 0

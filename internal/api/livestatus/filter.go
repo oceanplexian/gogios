@@ -5,10 +5,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/oceanplexian/gogios/internal/api"
 )
 
 // evaluateFilter checks if a row matches a filter expression.
-func evaluateFilter(f *FilterExpr, row interface{}, table *Table) bool {
+func evaluateFilter(f *FilterExpr, row interface{}, table *Table, provider *api.StateProvider) bool {
 	var result bool
 
 	if len(f.SubFilters) > 0 {
@@ -16,7 +19,7 @@ func evaluateFilter(f *FilterExpr, row interface{}, table *Table) bool {
 		if f.IsAnd {
 			result = true
 			for _, sub := range f.SubFilters {
-				if !evaluateFilter(sub, row, table) {
+				if !evaluateFilter(sub, row, table, provider) {
 					result = false
 					break
 				}
@@ -24,7 +27,7 @@ func evaluateFilter(f *FilterExpr, row interface{}, table *Table) bool {
 		} else {
 			result = false
 			for _, sub := range f.SubFilters {
-				if evaluateFilter(sub, row, table) {
+				if evaluateFilter(sub, row, table, provider) {
 					result = true
 					break
 				}
@@ -36,7 +39,7 @@ func evaluateFilter(f *FilterExpr, row interface{}, table *Table) bool {
 		if col == nil {
 			return false
 		}
-		result = compareValue(col.Extract(row), f.Operator, f.Value)
+		result = compareValue(col.ExtractValue(row, provider), f.Operator, f.Value)
 	}
 
 	if f.IsNegate {
@@ -46,9 +49,9 @@ func evaluateFilter(f *FilterExpr, row interface{}, table *Table) bool {
 }
 
 // evaluateFilters checks if a row matches all filters (implicit AND).
-func evaluateFilters(filters []*FilterExpr, row interface{}, table *Table) bool {
+func evaluateFilters(filters []*FilterExpr, row interface{}, table *Table, provider *api.StateProvider) bool {
 	for _, f := range filters {
-		if !evaluateFilter(f, row, table) {
+		if !evaluateFilter(f, row, table, provider) {
 			return false
 		}
 	}
@@ -90,6 +93,17 @@ func compareValue(colVal interface{}, op, filterVal string) bool {
 		return compareInt(iv, op, fv)
 	case []string:
 		return compareList(v, op, filterVal)
+	case time.Time:
+		// Convert to Unix epoch for numeric comparison (Thruk filters on timestamps)
+		unix := int64(0)
+		if !v.IsZero() {
+			unix = v.Unix()
+		}
+		fv, err := strconv.ParseInt(filterVal, 10, 64)
+		if err != nil {
+			return compareString(fmt.Sprintf("%d", unix), op, filterVal)
+		}
+		return compareInt64(unix, op, fv)
 	default:
 		return compareString(fmt.Sprintf("%v", colVal), op, filterVal)
 	}

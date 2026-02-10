@@ -1,0 +1,478 @@
+[1770693243] Nagios-Go 1.0.0 starting... (PID=67988)
+[1770693243] Local time is Mon Feb 09 20:14:03 MST 2026
+[1770693243] LOG VERSION: 2.0
+[1770693243] Finished loading configuration with 13 hosts, 38 services
+[1770693243] External command processor started on /Users/admin/scripts/nagios-go/test-configs/var/rw/nagios.cmd
+[1770693243] Scheduling initial checks...
+[1770693243] Scheduled 54 events in queue
+[1770693243] INITIAL HOST STATE: core-router;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: dist-switch-01;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: dist-switch-02;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: web-01;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: web-02;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: app-01;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: app-02;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: db-master;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: db-replica;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: mail-01;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: nagios-server;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: win-dc-01;UP;SOFT;0;
+[1770693243] INITIAL HOST STATE: dmz-proxy;UP;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: nagios-server;PING;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: nagios-server;Root Partition;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: nagios-server;Current Load;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: nagios-server;Total Processes;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: web-01;HTTP;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: web-02;HTTP;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: web-01;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: web-02;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: web-01;HTTPS;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-01;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-02;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-01;App Port 8080;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-02;App Port 8080;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-01;App Health;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-master;PostgreSQL Port;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-replica;PostgreSQL Port;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-master;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-replica;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-master;DB Replication Status;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-master;DB Connections;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: core-router;PING;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: core-router;Uptime;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: dist-switch-01;PING;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: dist-switch-02;PING;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: mail-01;SMTP;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: mail-01;IMAP;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: mail-01;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-01;Backup Status;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: db-master;DB Backup Status;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: core-router;SNMP Traps;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: dmz-proxy;HTTP;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: dmz-proxy;SSH;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: app-01;API Health;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: win-dc-01;PING;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: win-dc-01;DNS;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: win-dc-01;LDAP;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: nagios-server;DNS Resolution;OK;SOFT;0;
+[1770693243] INITIAL SERVICE STATE: core-router;Interface Status;OK;SOFT;0;
+[1770693243] Nagios-Go ready. Entering main event loop.
+[1770693246] SERVICE ALERT: nagios-server;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693246] SERVICE ALERT: web-01;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693246] SERVICE ALERT: app-01;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693246] HOST ALERT: dmz-proxy;DOWN;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693247] SERVICE ALERT: app-02;App Port 8080;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693247] SERVICE ALERT: db-replica;PostgreSQL Port;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693247] SERVICE ALERT: mail-01;SMTP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693248] SERVICE ALERT: dmz-proxy;HTTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693248] SERVICE ALERT: win-dc-01;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693248] SERVICE ALERT: nagios-server;DNS Resolution;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693248] SERVICE ALERT: nagios-server;Root Partition;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693249] SERVICE ALERT: web-01;HTTP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693249] SERVICE ALERT: web-02;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693249] SERVICE ALERT: app-02;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693249] SERVICE ALERT: app-01;App Health;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693249] SERVICE ALERT: db-master;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693250] SERVICE ALERT: dist-switch-01;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693250] SERVICE ALERT: mail-01;IMAP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693250] SERVICE ALERT: dmz-proxy;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693251] SERVICE ALERT: win-dc-01;DNS;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693251] SERVICE ALERT: nagios-server;Current Load;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693251] SERVICE ALERT: web-02;HTTP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693251] SERVICE ALERT: web-01;HTTPS;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693252] SERVICE ALERT: app-01;App Port 8080;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693252] SERVICE ALERT: db-master;PostgreSQL Port;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693252] SERVICE ALERT: db-replica;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693252] SERVICE ALERT: core-router;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693253] SERVICE ALERT: dist-switch-02;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693253] SERVICE ALERT: mail-01;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693253] SERVICE ALERT: win-dc-01;LDAP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693317] Nagios-Go 1.0.0 starting... (PID=71309)
+[1770693317] Local time is Mon Feb 09 20:15:17 MST 2026
+[1770693317] LOG VERSION: 2.0
+[1770693317] Finished loading configuration with 13 hosts, 38 services
+[1770693317] External command processor started on /Users/admin/scripts/nagios-go/test-configs/var/rw/nagios.cmd
+[1770693317] Scheduling initial checks...
+[1770693317] Scheduled 54 events in queue
+[1770693317] INITIAL HOST STATE: core-router;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: dist-switch-01;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: dist-switch-02;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: web-01;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: web-02;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: app-01;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: app-02;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: db-master;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: db-replica;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: mail-01;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: nagios-server;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: win-dc-01;UP;SOFT;0;
+[1770693317] INITIAL HOST STATE: dmz-proxy;UP;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: nagios-server;PING;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: nagios-server;Root Partition;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: nagios-server;Current Load;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: nagios-server;Total Processes;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: web-01;HTTP;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: web-02;HTTP;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: web-01;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: web-02;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: web-01;HTTPS;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-01;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-02;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-01;App Port 8080;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-02;App Port 8080;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-01;App Health;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-master;PostgreSQL Port;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-replica;PostgreSQL Port;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-master;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-replica;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-master;DB Replication Status;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-master;DB Connections;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: core-router;PING;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: core-router;Uptime;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: dist-switch-01;PING;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: dist-switch-02;PING;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: mail-01;SMTP;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: mail-01;IMAP;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: mail-01;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-01;Backup Status;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: db-master;DB Backup Status;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: core-router;SNMP Traps;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: dmz-proxy;HTTP;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: dmz-proxy;SSH;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: app-01;API Health;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: win-dc-01;PING;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: win-dc-01;DNS;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: win-dc-01;LDAP;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: nagios-server;DNS Resolution;OK;SOFT;0;
+[1770693317] INITIAL SERVICE STATE: core-router;Interface Status;OK;SOFT;0;
+[1770693317] Nagios-Go ready. Entering main event loop.
+[1770693320] SERVICE ALERT: nagios-server;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693320] SERVICE ALERT: web-01;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693320] HOST ALERT: dmz-proxy;DOWN;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693320] SERVICE ALERT: app-01;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693320] SERVICE ALERT: app-02;App Port 8080;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693321] SERVICE ALERT: db-replica;PostgreSQL Port;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693321] SERVICE ALERT: mail-01;SMTP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693322] SERVICE ALERT: dmz-proxy;HTTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693322] SERVICE ALERT: win-dc-01;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693322] SERVICE ALERT: nagios-server;DNS Resolution;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693322] SERVICE ALERT: nagios-server;Root Partition;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693322] SERVICE ALERT: web-01;HTTP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693323] SERVICE ALERT: web-02;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693323] SERVICE ALERT: app-02;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693323] SERVICE ALERT: app-01;App Health;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693323] SERVICE ALERT: db-master;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693324] SERVICE ALERT: dist-switch-01;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693324] SERVICE ALERT: mail-01;IMAP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693324] SERVICE ALERT: dmz-proxy;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693324] SERVICE ALERT: win-dc-01;DNS;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693325] SERVICE ALERT: nagios-server;Current Load;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693325] SERVICE ALERT: web-02;HTTP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693325] SERVICE ALERT: web-01;HTTPS;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693326] SERVICE ALERT: app-01;App Port 8080;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693326] SERVICE ALERT: db-master;PostgreSQL Port;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693326] SERVICE ALERT: db-replica;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693326] SERVICE ALERT: core-router;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693326] SERVICE ALERT: dist-switch-02;PING;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693327] SERVICE ALERT: mail-01;SSH;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693327] SERVICE ALERT: win-dc-01;LDAP;CRITICAL;SOFT;1;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: admin;app-02;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: admin;app-02;App Port 8080;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: oncall-engineer;app-02;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: oncall-engineer;app-02;App Port 8080;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: dev-lead;app-02;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE ALERT: app-02;App Port 8080;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: admin;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: admin;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: oncall-engineer;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: oncall-engineer;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE NOTIFICATION: dba;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693367] SERVICE ALERT: db-replica;PostgreSQL Port;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693369] SERVICE NOTIFICATION: admin;web-01;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693369] SERVICE NOTIFICATION: admin;web-01;HTTP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693369] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693369] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693369] SERVICE NOTIFICATION: manager;web-01;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693369] SERVICE ALERT: web-01;HTTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: admin;web-02;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: admin;web-02;HTTP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: oncall-engineer;web-02;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: oncall-engineer;web-02;HTTP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: manager;web-02;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE ALERT: web-02;HTTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: admin;web-01;HTTPS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: admin;web-01;HTTPS;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTPS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTPS;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE NOTIFICATION: manager;web-01;HTTPS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693371] SERVICE ALERT: web-01;HTTPS;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: admin;app-01;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: admin;app-01;App Port 8080;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: oncall-engineer;app-01;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: oncall-engineer;app-01;App Port 8080;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: dev-lead;app-01;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE ALERT: app-01;App Port 8080;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: admin;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: admin;db-master;PostgreSQL Port;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: oncall-engineer;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: oncall-engineer;db-master;PostgreSQL Port;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: manager;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: dba;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE ALERT: db-master;PostgreSQL Port;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: admin;core-router;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: admin;core-router;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: oncall-engineer;core-router;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE NOTIFICATION: oncall-engineer;core-router;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693372] SERVICE ALERT: core-router;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693426] SERVICE NOTIFICATION: admin;nagios-server;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693426] SERVICE NOTIFICATION: admin;nagios-server;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693426] SERVICE NOTIFICATION: oncall-engineer;nagios-server;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693426] SERVICE NOTIFICATION: oncall-engineer;nagios-server;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693426] SERVICE ALERT: nagios-server;PING;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693428] SERVICE NOTIFICATION: admin;nagios-server;Root Partition;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693428] SERVICE NOTIFICATION: admin;nagios-server;Root Partition;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693428] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Root Partition;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693428] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Root Partition;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693428] SERVICE ALERT: nagios-server;Root Partition;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693429] SERVICE NOTIFICATION: admin;app-01;App Health;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693429] SERVICE NOTIFICATION: admin;app-01;App Health;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693429] SERVICE NOTIFICATION: oncall-engineer;app-01;App Health;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693429] SERVICE NOTIFICATION: oncall-engineer;app-01;App Health;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693429] SERVICE ALERT: app-01;App Health;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693431] SERVICE NOTIFICATION: admin;nagios-server;Current Load;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693431] SERVICE NOTIFICATION: admin;nagios-server;Current Load;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693431] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Current Load;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693431] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Current Load;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693431] SERVICE ALERT: nagios-server;Current Load;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693440] SERVICE NOTIFICATION: admin;app-02;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693440] SERVICE NOTIFICATION: admin;app-02;App Port 8080;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693440] SERVICE NOTIFICATION: oncall-engineer;app-02;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693440] SERVICE NOTIFICATION: oncall-engineer;app-02;App Port 8080;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693440] SERVICE NOTIFICATION: dev-lead;app-02;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693440] SERVICE ALERT: app-02;App Port 8080;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693441] SERVICE NOTIFICATION: admin;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693441] SERVICE NOTIFICATION: admin;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693441] SERVICE NOTIFICATION: oncall-engineer;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693441] SERVICE NOTIFICATION: oncall-engineer;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693441] SERVICE NOTIFICATION: dba;db-replica;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693441] SERVICE ALERT: db-replica;PostgreSQL Port;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693442] SERVICE NOTIFICATION: admin;web-01;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693442] SERVICE NOTIFICATION: admin;web-01;HTTP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693442] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693442] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693442] SERVICE NOTIFICATION: manager;web-01;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693442] SERVICE ALERT: web-01;HTTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: admin;web-02;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: admin;web-02;HTTP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: oncall-engineer;web-02;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: oncall-engineer;web-02;HTTP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: manager;web-02;HTTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE ALERT: web-02;HTTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: admin;web-01;HTTPS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: admin;web-01;HTTPS;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTPS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: oncall-engineer;web-01;HTTPS;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE NOTIFICATION: manager;web-01;HTTPS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693445] SERVICE ALERT: web-01;HTTPS;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: admin;app-01;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: admin;app-01;App Port 8080;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: oncall-engineer;app-01;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: oncall-engineer;app-01;App Port 8080;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: dev-lead;app-01;App Port 8080;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE ALERT: app-01;App Port 8080;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: admin;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: admin;db-master;PostgreSQL Port;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: oncall-engineer;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: oncall-engineer;db-master;PostgreSQL Port;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: manager;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: dba;db-master;PostgreSQL Port;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE ALERT: db-master;PostgreSQL Port;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: admin;core-router;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: admin;core-router;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: oncall-engineer;core-router;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE NOTIFICATION: oncall-engineer;core-router;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693446] SERVICE ALERT: core-router;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: admin;web-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: admin;web-01;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: oncall-engineer;web-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: oncall-engineer;web-01;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE ALERT: web-01;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] HOST NOTIFICATION: admin;dmz-proxy;PROBLEM;notify-host-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] HOST NOTIFICATION: admin;dmz-proxy;PROBLEM;notify-host-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] HOST NOTIFICATION: oncall-engineer;dmz-proxy;PROBLEM;notify-host-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] HOST NOTIFICATION: oncall-engineer;dmz-proxy;PROBLEM;notify-host-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] HOST NOTIFICATION: manager;dmz-proxy;PROBLEM;notify-host-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] HOST ALERT: dmz-proxy;DOWN;HARD;5;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: admin;app-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: admin;app-01;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: oncall-engineer;app-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE NOTIFICATION: oncall-engineer;app-01;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693486] SERVICE ALERT: app-01;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693487] SERVICE NOTIFICATION: admin;mail-01;SMTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693487] SERVICE NOTIFICATION: admin;mail-01;SMTP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693487] SERVICE NOTIFICATION: oncall-engineer;mail-01;SMTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693487] SERVICE NOTIFICATION: oncall-engineer;mail-01;SMTP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693487] SERVICE ALERT: mail-01;SMTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693488] SERVICE NOTIFICATION: admin;win-dc-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693488] SERVICE NOTIFICATION: admin;win-dc-01;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693488] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693488] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693488] SERVICE ALERT: win-dc-01;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: admin;web-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: admin;web-02;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: oncall-engineer;web-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: oncall-engineer;web-02;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE ALERT: web-02;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: admin;app-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: admin;app-02;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: oncall-engineer;app-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: oncall-engineer;app-02;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE ALERT: app-02;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: admin;db-master;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: admin;db-master;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: oncall-engineer;db-master;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: oncall-engineer;db-master;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE NOTIFICATION: dba;db-master;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693489] SERVICE ALERT: db-master;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: admin;dist-switch-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: admin;dist-switch-01;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: oncall-engineer;dist-switch-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: oncall-engineer;dist-switch-01;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE ALERT: dist-switch-01;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: admin;mail-01;IMAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: admin;mail-01;IMAP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: oncall-engineer;mail-01;IMAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE NOTIFICATION: oncall-engineer;mail-01;IMAP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693490] SERVICE ALERT: mail-01;IMAP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693491] SERVICE NOTIFICATION: admin;win-dc-01;DNS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693491] SERVICE NOTIFICATION: admin;win-dc-01;DNS;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693491] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;DNS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693491] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;DNS;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693491] SERVICE ALERT: win-dc-01;DNS;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693492] SERVICE NOTIFICATION: admin;db-replica;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693492] SERVICE NOTIFICATION: admin;db-replica;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693492] SERVICE NOTIFICATION: oncall-engineer;db-replica;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693492] SERVICE NOTIFICATION: oncall-engineer;db-replica;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693492] SERVICE NOTIFICATION: dba;db-replica;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693492] SERVICE ALERT: db-replica;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: admin;dist-switch-02;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: admin;dist-switch-02;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: oncall-engineer;dist-switch-02;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: oncall-engineer;dist-switch-02;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE ALERT: dist-switch-02;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: admin;mail-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: admin;mail-01;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: oncall-engineer;mail-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: oncall-engineer;mail-01;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE ALERT: mail-01;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: admin;win-dc-01;LDAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: admin;win-dc-01;LDAP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;LDAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;LDAP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693493] SERVICE ALERT: win-dc-01;LDAP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693500] SERVICE NOTIFICATION: admin;nagios-server;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693500] SERVICE NOTIFICATION: admin;nagios-server;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693500] SERVICE NOTIFICATION: oncall-engineer;nagios-server;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693500] SERVICE NOTIFICATION: oncall-engineer;nagios-server;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693500] SERVICE ALERT: nagios-server;PING;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693502] SERVICE NOTIFICATION: admin;nagios-server;Root Partition;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693502] SERVICE NOTIFICATION: admin;nagios-server;Root Partition;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693502] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Root Partition;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693502] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Root Partition;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693502] SERVICE ALERT: nagios-server;Root Partition;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693503] SERVICE NOTIFICATION: admin;app-01;App Health;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693503] SERVICE NOTIFICATION: admin;app-01;App Health;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693503] SERVICE NOTIFICATION: oncall-engineer;app-01;App Health;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693503] SERVICE NOTIFICATION: oncall-engineer;app-01;App Health;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693503] SERVICE ALERT: app-01;App Health;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693505] SERVICE NOTIFICATION: admin;nagios-server;Current Load;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693505] SERVICE NOTIFICATION: admin;nagios-server;Current Load;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693505] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Current Load;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693505] SERVICE NOTIFICATION: oncall-engineer;nagios-server;Current Load;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693505] SERVICE ALERT: nagios-server;Current Load;CRITICAL;HARD;4;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: admin;web-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: admin;web-01;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: oncall-engineer;web-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: oncall-engineer;web-01;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE ALERT: web-01;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: admin;app-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: admin;app-01;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: oncall-engineer;app-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE NOTIFICATION: oncall-engineer;app-01;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] SERVICE ALERT: app-01;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] HOST NOTIFICATION: admin;dmz-proxy;PROBLEM;notify-host-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] HOST NOTIFICATION: admin;dmz-proxy;PROBLEM;notify-host-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] HOST NOTIFICATION: oncall-engineer;dmz-proxy;PROBLEM;notify-host-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] HOST NOTIFICATION: oncall-engineer;dmz-proxy;PROBLEM;notify-host-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] HOST NOTIFICATION: manager;dmz-proxy;PROBLEM;notify-host-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693560] HOST ALERT: dmz-proxy;DOWN;HARD;5;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693561] SERVICE NOTIFICATION: admin;mail-01;SMTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693561] SERVICE NOTIFICATION: admin;mail-01;SMTP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693561] SERVICE NOTIFICATION: oncall-engineer;mail-01;SMTP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693561] SERVICE NOTIFICATION: oncall-engineer;mail-01;SMTP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693561] SERVICE ALERT: mail-01;SMTP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693562] SERVICE NOTIFICATION: admin;win-dc-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693562] SERVICE NOTIFICATION: admin;win-dc-01;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693562] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693562] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693562] SERVICE ALERT: win-dc-01;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: admin;web-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: admin;web-02;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: oncall-engineer;web-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: oncall-engineer;web-02;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE ALERT: web-02;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: admin;app-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: admin;app-02;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: oncall-engineer;app-02;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: oncall-engineer;app-02;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE ALERT: app-02;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: admin;db-master;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: admin;db-master;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: oncall-engineer;db-master;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: oncall-engineer;db-master;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE NOTIFICATION: dba;db-master;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693563] SERVICE ALERT: db-master;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: admin;dist-switch-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: admin;dist-switch-01;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: oncall-engineer;dist-switch-01;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: oncall-engineer;dist-switch-01;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE ALERT: dist-switch-01;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: admin;mail-01;IMAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: admin;mail-01;IMAP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: oncall-engineer;mail-01;IMAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: oncall-engineer;mail-01;IMAP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE ALERT: mail-01;IMAP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: admin;win-dc-01;DNS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: admin;win-dc-01;DNS;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;DNS;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;DNS;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693564] SERVICE ALERT: win-dc-01;DNS;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: admin;db-replica;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: admin;db-replica;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: oncall-engineer;db-replica;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: oncall-engineer;db-replica;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: dba;db-replica;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE ALERT: db-replica;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: admin;dist-switch-02;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: admin;dist-switch-02;PING;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: oncall-engineer;dist-switch-02;PING;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE NOTIFICATION: oncall-engineer;dist-switch-02;PING;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693566] SERVICE ALERT: dist-switch-02;PING;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: admin;mail-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: admin;mail-01;SSH;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: oncall-engineer;mail-01;SSH;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: oncall-engineer;mail-01;SSH;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE ALERT: mail-01;SSH;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: admin;win-dc-01;LDAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: admin;win-dc-01;LDAP;PROBLEM;notify-service-by-slack;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;LDAP;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE NOTIFICATION: oncall-engineer;win-dc-01;LDAP;PROBLEM;notify-service-by-pager;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693567] SERVICE ALERT: win-dc-01;LDAP;CRITICAL;HARD;3;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770693823] Caught interrupt, shutting down...
+[1770693823] Shutting down...
+[1770693823] Caught interrupt, shutting down...
+[1770694448] SERVICE NOTIFICATION: dev-lead;nagios-server;DNS Resolution;PROBLEM;notify-service-by-email;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770694448] SERVICE ALERT: nagios-server;DNS Resolution;CRITICAL;HARD;5;(No output on stdout) stderr: /bin/sh: -c: line 0: unexpected EOF while looking for matching `"'
+[1770695553] Caught terminated, shutting down...
+[1770695553] Shutting down...
+[1770695553] Caught terminated, shutting down...
