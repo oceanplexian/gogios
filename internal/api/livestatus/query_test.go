@@ -289,6 +289,67 @@ func TestParseQuery_EmptyQuery(t *testing.T) {
 	}
 }
 
+func TestParseQuery_RegexFilterPrecompiled(t *testing.T) {
+	q, err := ParseQuery("GET hosts\nFilter: name ~ ^web.*prod$\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Filters) != 1 {
+		t.Fatalf("len(Filters) = %d, want 1", len(q.Filters))
+	}
+	f := q.Filters[0]
+	if f.CompiledRe == nil {
+		t.Fatal("CompiledRe is nil, expected pre-compiled regex")
+	}
+	if !f.CompiledRe.MatchString("web-01-prod") {
+		t.Error("CompiledRe should match 'web-01-prod'")
+	}
+	if f.CompiledRe.MatchString("db-01-prod") {
+		t.Error("CompiledRe should NOT match 'db-01-prod'")
+	}
+}
+
+func TestParseQuery_NegRegexFilterPrecompiled(t *testing.T) {
+	q, err := ParseQuery("GET hosts\nFilter: name !~ test\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	f := q.Filters[0]
+	if f.CompiledRe == nil {
+		t.Fatal("CompiledRe is nil for !~ operator")
+	}
+}
+
+func TestParseQuery_NonRegexFilterNoCompiledRe(t *testing.T) {
+	q, err := ParseQuery("GET hosts\nFilter: state = 0\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.Filters[0].CompiledRe != nil {
+		t.Error("CompiledRe should be nil for = operator")
+	}
+}
+
+func TestParseQuery_InvalidRegexReturnsError(t *testing.T) {
+	_, err := ParseQuery("GET hosts\nFilter: name ~ [invalid\n")
+	if err == nil {
+		t.Fatal("expected error for invalid regex, got nil")
+	}
+}
+
+func TestParseQuery_StatsRegexPrecompiled(t *testing.T) {
+	q, err := ParseQuery("GET services\nStats: description ~ ^http\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Stats) != 1 {
+		t.Fatalf("len(Stats) = %d, want 1", len(q.Stats))
+	}
+	if q.Stats[0].CompiledRe == nil {
+		t.Fatal("Stats CompiledRe is nil, expected pre-compiled regex")
+	}
+}
+
 func TestParseQuery_FullThrukStyle(t *testing.T) {
 	query := "GET services\n" +
 		"Columns: host_name description state plugin_output\n" +

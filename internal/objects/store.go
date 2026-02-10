@@ -1,8 +1,15 @@
 package objects
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 type ObjectStore struct {
+	// Mu protects mutable runtime state on Host/Service objects.
+	// The scheduler takes a write lock when processing check results;
+	// livestatus readers take a read lock when executing queries.
+	Mu sync.RWMutex
 	Hosts              []*Host
 	Services           []*Service
 	Commands           []*Command

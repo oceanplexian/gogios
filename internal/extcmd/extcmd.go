@@ -32,6 +32,10 @@ type Processor struct {
 	wg       sync.WaitGroup
 	mu       sync.RWMutex
 	logger   func(string, ...interface{})
+	// StateMu is an optional mutex held during handler invocation to
+	// synchronize state mutations with concurrent readers (e.g. livestatus).
+	// Set by the caller after construction.
+	StateMu *sync.RWMutex
 }
 
 // NewProcessor creates a new command processor.
@@ -73,6 +77,10 @@ func (p *Processor) Dispatch(name string, args []string) {
 	handler, ok := p.handlers[name]
 	p.mu.RUnlock()
 	if ok {
+		if p.StateMu != nil {
+			p.StateMu.Lock()
+			defer p.StateMu.Unlock()
+		}
 		handler(&Command{
 			Timestamp: time.Now().Unix(),
 			Name:      name,
@@ -168,7 +176,13 @@ func (p *Processor) readLoop() {
 			p.mu.RUnlock()
 
 			if ok {
+				if p.StateMu != nil {
+					p.StateMu.Lock()
+				}
 				handler(cmd)
+				if p.StateMu != nil {
+					p.StateMu.Unlock()
+				}
 			}
 
 			// Also send to channel for main loop processing

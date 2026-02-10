@@ -64,3 +64,38 @@ func TestJoinKey_Empty(t *testing.T) {
 		t.Errorf("joinKey([]) = %q, want %q", got, "")
 	}
 }
+
+func TestCanSinglePassStats_FilterCountOnly(t *testing.T) {
+	stats := []*StatsExpr{
+		{Column: "state", Operator: "=", Value: "0"},
+		{Column: "state", Operator: "=", Value: "1"},
+	}
+	if !canSinglePassStats(stats) {
+		t.Error("expected canSinglePassStats=true for filter-count stats")
+	}
+}
+
+func TestCanSinglePassStats_AggregateReturnsFalse(t *testing.T) {
+	stats := []*StatsExpr{
+		{Column: "state", Operator: "=", Value: "0"},
+		{Function: "sum", Column: "execution_time"},
+	}
+	if canSinglePassStats(stats) {
+		t.Error("expected canSinglePassStats=false when aggregate function present")
+	}
+}
+
+func TestCanSinglePassStats_CompoundStatsAllowed(t *testing.T) {
+	stats := []*StatsExpr{
+		{
+			SubStats: []*StatsExpr{
+				{Column: "state", Operator: "=", Value: "0"},
+				{Column: "has_been_checked", Operator: "=", Value: "1"},
+			},
+			IsAnd: true,
+		},
+	}
+	if !canSinglePassStats(stats) {
+		t.Error("expected canSinglePassStats=true for compound stats without aggregates")
+	}
+}

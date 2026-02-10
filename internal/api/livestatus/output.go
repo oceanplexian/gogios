@@ -16,17 +16,35 @@ func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 		return errorResponse(q, 404, "Unknown table: "+q.Table)
 	}
 
+	// Snapshot the row pointers under a brief read lock, then release.
+	// Filtering, sorting, stats, and formatting run lock-free on the
+	// snapshot.  A concurrent check-result write may update individual
+	// struct fields mid-query, but for monitoring data this is acceptable
+	// (at worst one object shows a mix of old/new fields for one cycle).
+	provider.Store.Mu.RLock()
 	rows := table.GetRows(provider)
+	provider.Store.Mu.RUnlock()
+
+	// Fast path: ungrouped, filter-count-only stats can be evaluated in a
+	// single pass without materializing the filtered slice.
+	if len(q.Stats) > 0 && len(q.Columns) == 0 && canSinglePassStats(q.Stats) {
+		results := evaluateStatsSinglePass(q, rows, table, provider)
+		var row []interface{}
+		for _, v := range results {
+			row = append(row, v)
+		}
+		return formatResponse(q, nil, [][]interface{}{row})
+	}
 
 	// Apply filters
-	var filtered []interface{}
+	filtered := make([]interface{}, 0, len(rows))
 	for _, row := range rows {
 		if evaluateFilters(q.Filters, row, table, provider) {
 			filtered = append(filtered, row)
 		}
 	}
 
-	// Stats mode
+	// Stats mode (grouped or aggregate stats that need the filtered set)
 	if len(q.Stats) > 0 {
 		return formatStatsResponse(q, filtered, table, provider)
 	}

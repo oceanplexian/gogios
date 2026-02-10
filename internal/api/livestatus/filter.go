@@ -10,6 +10,12 @@ import (
 	"github.com/oceanplexian/gogios/internal/api"
 )
 
+// compareCtx carries pre-compiled state for filter evaluation to avoid
+// per-row allocations (e.g. regex compilation).
+type compareCtx struct {
+	compiledRe *regexp.Regexp
+}
+
 // evaluateFilter checks if a row matches a filter expression.
 func evaluateFilter(f *FilterExpr, row interface{}, table *Table, provider *api.StateProvider) bool {
 	var result bool
@@ -39,7 +45,7 @@ func evaluateFilter(f *FilterExpr, row interface{}, table *Table, provider *api.
 		if col == nil {
 			return false
 		}
-		result = compareValue(col.ExtractValue(row, provider), f.Operator, f.Value)
+		result = compareValue(col.ExtractValue(row, provider), f.Operator, f.Value, &compareCtx{compiledRe: f.CompiledRe})
 	}
 
 	if f.IsNegate {
@@ -59,26 +65,31 @@ func evaluateFilters(filters []*FilterExpr, row interface{}, table *Table, provi
 }
 
 // compareValue compares an extracted column value against the filter value.
-func compareValue(colVal interface{}, op, filterVal string) bool {
+// The optional ctx carries pre-compiled state (e.g. regex) to avoid per-row work.
+func compareValue(colVal interface{}, op, filterVal string, ctx ...*compareCtx) bool {
+	var cc *compareCtx
+	if len(ctx) > 0 {
+		cc = ctx[0]
+	}
 	switch v := colVal.(type) {
 	case string:
-		return compareString(v, op, filterVal)
+		return compareString(v, op, filterVal, cc)
 	case int:
 		fv, err := strconv.Atoi(filterVal)
 		if err != nil {
-			return compareString(fmt.Sprintf("%d", v), op, filterVal)
+			return compareString(fmt.Sprintf("%d", v), op, filterVal, cc)
 		}
 		return compareInt(v, op, fv)
 	case int64:
 		fv, err := strconv.ParseInt(filterVal, 10, 64)
 		if err != nil {
-			return compareString(fmt.Sprintf("%d", v), op, filterVal)
+			return compareString(fmt.Sprintf("%d", v), op, filterVal, cc)
 		}
 		return compareInt64(v, op, fv)
 	case float64:
 		fv, err := strconv.ParseFloat(filterVal, 64)
 		if err != nil {
-			return compareString(fmt.Sprintf("%g", v), op, filterVal)
+			return compareString(fmt.Sprintf("%g", v), op, filterVal, cc)
 		}
 		return compareFloat(v, op, fv)
 	case bool:
@@ -101,11 +112,11 @@ func compareValue(colVal interface{}, op, filterVal string) bool {
 		}
 		fv, err := strconv.ParseInt(filterVal, 10, 64)
 		if err != nil {
-			return compareString(fmt.Sprintf("%d", unix), op, filterVal)
+			return compareString(fmt.Sprintf("%d", unix), op, filterVal, cc)
 		}
 		return compareInt64(unix, op, fv)
 	default:
-		return compareString(fmt.Sprintf("%v", colVal), op, filterVal)
+		return compareString(fmt.Sprintf("%v", colVal), op, filterVal, cc)
 	}
 }
 
@@ -166,7 +177,7 @@ func compareFloat(a float64, op string, b float64) bool {
 	}
 }
 
-func compareString(a, op, b string) bool {
+func compareString(a, op, b string, ctx ...*compareCtx) bool {
 	switch op {
 	case "=":
 		return a == b
@@ -181,12 +192,19 @@ func compareString(a, op, b string) bool {
 	case ">=":
 		return a >= b
 	case "~":
+		// Use pre-compiled regex when available (avoids per-row compilation)
+		if len(ctx) > 0 && ctx[0] != nil && ctx[0].compiledRe != nil {
+			return ctx[0].compiledRe.MatchString(a)
+		}
 		re, err := regexp.Compile(b)
 		if err != nil {
 			return false
 		}
 		return re.MatchString(a)
 	case "!~":
+		if len(ctx) > 0 && ctx[0] != nil && ctx[0].compiledRe != nil {
+			return !ctx[0].compiledRe.MatchString(a)
+		}
 		re, err := regexp.Compile(b)
 		if err != nil {
 			return true

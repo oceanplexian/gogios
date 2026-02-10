@@ -2,6 +2,7 @@ package livestatus
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -33,16 +34,18 @@ type FilterExpr struct {
 	Column     string
 	Operator   string
 	Value      string
-	IsAnd      bool // true=And, false=Or (for compound filters)
+	CompiledRe *regexp.Regexp // pre-compiled for ~ and !~ operators
+	IsAnd      bool           // true=And, false=Or (for compound filters)
 	IsNegate   bool
 	SubFilters []*FilterExpr
 }
 
 // StatsExpr represents a single stats directive or a compound stats (StatsAnd/StatsOr).
 type StatsExpr struct {
-	Column   string
-	Operator string
-	Value    string
+	Column     string
+	Operator   string
+	Value      string
+	CompiledRe *regexp.Regexp // pre-compiled for ~ and !~ operators
 	// If Op is an aggregation function:
 	Function string // "sum", "avg", "min", "max", "std", or "" for filter-count
 	// For compound stats (StatsAnd/StatsOr)
@@ -231,6 +234,14 @@ func parseFilterExpr(s string) (*FilterExpr, error) {
 	if len(parts) >= 3 {
 		f.Value = parts[2]
 	}
+	// Pre-compile regex for ~ and !~ operators (avoids per-row compilation)
+	if f.Operator == "~" || f.Operator == "!~" {
+		re, err := regexp.Compile(f.Value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex in filter %q: %w", f.Value, err)
+		}
+		f.CompiledRe = re
+	}
 	return f, nil
 }
 
@@ -258,6 +269,14 @@ func parseStatsExpr(s string) (*StatsExpr, error) {
 	}
 	if len(parts) >= 3 {
 		se.Value = parts[2]
+	}
+	// Pre-compile regex for ~ and !~ operators
+	if se.Operator == "~" || se.Operator == "!~" {
+		re, err := regexp.Compile(se.Value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex in stats %q: %w", se.Value, err)
+		}
+		se.CompiledRe = re
 	}
 	return se, nil
 }

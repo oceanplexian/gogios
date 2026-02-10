@@ -115,7 +115,8 @@ gogios
     │       └── table_*.go       #   14 table implementations
     │
     ├── checker/                 # Check execution engine
-    │   ├── executor.go          #   Bounded goroutine pool (default 256 concurrent)
+    │   ├── executor.go          #   Worker pool (default 256 concurrent) + fork server
+    │   ├── forkserver.go        #   Persistent shell workers (avoids fork from large parent)
     │   ├── service.go           #   Service SOFT/HARD state machine
     │   ├── host.go              #   Host SOFT/HARD state machine
     │   ├── flap.go              #   Weighted flap detection (21-entry circular buffer)
@@ -198,8 +199,8 @@ This isn't a toy. Here's the full feature matrix:
 
 | Feature | Status |
 |---------|--------|
-| Bounded concurrent check execution (goroutine pool, semaphore-limited) | Done |
-| Plugin execution via `/bin/sh -c` | Done |
+| Bounded concurrent check execution (256-worker pool + fork server) | Done |
+| Plugin execution via persistent `/bin/sh` workers (fallback to direct fork+exec) | Done |
 | Configurable timeouts (returns CRITICAL on timeout) | Done |
 | Service SOFT/HARD state machine (full Nagios state transition logic) | Done |
 | Host SOFT/HARD state machine | Done |
@@ -594,6 +595,111 @@ Both can be used together:
 ```bash
 ./gogios --verbose-checks --verbose-livestatus /etc/nagios/nagios.cfg
 ```
+
+---
+
+## Performance
+
+Gogios was benchmarked from 100 to 500,000 services on a single machine (Apple M4, macOS). Check plugins used `/usr/bin/true` (zero-cost plugin) to isolate scheduling and execution overhead from plugin runtime.
+
+### Check Throughput
+
+The fork server architecture keeps persistent `/bin/sh` processes alive per worker, so child commands fork from a ~3MB shell instead of the ~700MB Go parent. This eliminates the kernel page-table copy cost that made `fork()` scale inversely with RSS.
+
+<p align="center">
+  <img src="assets/readme/check_throughput.png" alt="Check Throughput" width="700">
+</p>
+
+**Result:** Flat ~2,400 checks/sec from 10k to 500k services. The dashed line marks the rate needed to check 100k services within a 60-second interval.
+
+### Memory & Startup
+
+<p align="center">
+  <img src="assets/readme/memory_usage.png" alt="Memory Usage" width="600">
+  <img src="assets/readme/startup_time.png" alt="Startup Time" width="600">
+</p>
+
+Memory scales linearly with object count. Startup (config parse + schedule build) stays under 5 seconds even at 500k services.
+
+### Livestatus / LQL
+
+<p align="center">
+  <img src="assets/readme/lql_throughput.png" alt="LQL Throughput" width="900">
+</p>
+
+<p align="center">
+  <img src="assets/readme/lql_latency.png" alt="LQL Latency" width="750">
+</p>
+
+LQL queries use snapshot-based reads (lock held only during slice copy), pre-compiled regex filters, and single-pass stats evaluation. Hosts queries stay above 50 rps even at 500k services. Stats queries (the kind Thruk fires constantly) hold up well across the range.
+
+### Raw Numbers
+
+| Services | Startup | RSS | Checks/sec | LQL Hosts rps | LQL Services rps | LQL Stats rps |
+|----------|---------|-----|------------|---------------|-------------------|---------------|
+| 100 | 17ms | 19MB | 10 | 8,116 | 14,479 | 14,974 |
+| 1,000 | 40ms | 29MB | 100 | 6,200 | 3,648 | 8,753 |
+| 10,000 | 235ms | 107MB | 1,000 | 7,958 | 199 | 6,657 |
+| 50,000 | 544ms | 411MB | 2,307 | 2,995 | 35 | 159 |
+| 100,000 | 998ms | 737MB | 2,413 | 562 | 18 | 100 |
+| 200,000 | 1.6s | 1.4GB | 2,398 | 217 | 9 | 51 |
+| 500,000 | 4.2s | 2.6GB | 2,334 | 54 | 3 | 17 |
+
+### Running the Benchmark
+
+```bash
+# Build the binary
+go build -o gogios-bench ./cmd/gogios
+
+# Run the full suite (100 → 500k services, takes ~20 minutes)
+go run bench/scale/scale.go -binary ./gogios-bench -out bench/results.csv
+
+# Run a single scenario (e.g. 100k services only)
+go run bench/scale/scale.go -binary ./gogios-bench -out bench/results.csv -only 100000
+
+# Custom check command (default: /usr/bin/true)
+go run bench/scale/scale.go -binary ./gogios-bench -check "/usr/lib/nagios/plugins/check_ping -H 127.0.0.1 -w 100,20% -c 500,60%"
+
+# Generate README graphs from results
+python3 bench/plot_readme.py
+```
+
+The benchmark generates synthetic Nagios configs, starts gogios, measures check throughput via Livestatus `Stats: last_check >= <timestamp>` over a 10-second window, then hammers the LQL endpoint with concurrent queries.
+
+---
+
+## Scaling Guidelines
+
+The check throughput ceiling (~2,400 checks/sec with `/usr/bin/true`) is the theoretical maximum — real plugins take time to execute, so the practical limit depends on your check command runtimes.
+
+### Active Check Capacity
+
+With a 1-minute check interval (`check_interval=1`, `interval_length=60`):
+
+| Plugin Runtime | Max Active Services | Example Setup |
+|---------------|-------------------|---------------|
+| ~0ms (trivial) | ~140,000 | 2,400/sec × 60s. CPU-bound limit. |
+| ~10ms (fast) | ~15,000 | `check_ping` to localhost, simple scripts |
+| ~100ms (typical) | ~2,500 | `check_http`, `check_mysql`, LAN checks |
+| ~500ms (slow) | ~500 | Remote checks over WAN, DNS-heavy plugins |
+| ~2s (very slow) | ~125 | Complex SNMP walks, slow API calls |
+
+The 256 default worker pool means up to 256 checks run simultaneously. If your average plugin takes 100ms, you get `256 / 0.1 = 2,560` checks/sec throughput. The table above uses `256 / plugin_seconds × 60` to estimate capacity.
+
+### Rule of Thumb
+
+- **< 5,000 services**: Active checks work great. Default config, no tuning needed.
+- **5,000 – 50,000 services**: Active checks still work. Consider `max_concurrent_checks=512` and faster check intervals. Keep plugin runtimes under 200ms.
+- **50,000 – 100,000 services**: Feasible with active checks if plugins are fast (< 50ms average). Use NRPE or local agents to minimize network latency in check plugins. Bump `max_concurrent_checks` to match your CPU cores × plugins-per-core capacity.
+- **100,000+ services**: Shift to passive checks (NSCA, check_mk, NRPE push mode). Active polling at this scale requires extremely fast plugins or distributed check execution. The scheduler and LQL engine handle the object count fine — it's plugin execution time that becomes the bottleneck.
+
+### When to Go Passive
+
+If `(number_of_services × average_plugin_runtime) / 60 > max_concurrent_checks`, you'll fall behind. At that point:
+
+1. Deploy check agents (NRPE, check_mk agent, node_exporter + adapter) on monitored hosts
+2. Have them push results via `PROCESS_SERVICE_CHECK_RESULT` through the command pipe or Livestatus
+3. Gogios processes passive results through the same state machine — SOFT/HARD transitions, notifications, downtimes all work identically
 
 ---
 

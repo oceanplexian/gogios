@@ -31,8 +31,9 @@ func evaluateFilterStat(s *StatsExpr, rows []interface{}, table *Table, provider
 	if col == nil {
 		return 0
 	}
+	ctx := &compareCtx{compiledRe: s.CompiledRe}
 	for _, row := range rows {
-		if compareValue(col.ExtractValue(row, provider), s.Operator, s.Value) {
+		if compareValue(col.ExtractValue(row, provider), s.Operator, s.Value, ctx) {
 			count++
 		}
 	}
@@ -142,7 +143,7 @@ func statRowMatch(s *StatsExpr, row interface{}, table *Table, provider *api.Sta
 	if col == nil {
 		return false
 	}
-	return compareValue(col.ExtractValue(row, provider), s.Operator, s.Value)
+	return compareValue(col.ExtractValue(row, provider), s.Operator, s.Value, &compareCtx{compiledRe: s.CompiledRe})
 }
 
 func toFloat64(v interface{}) float64 {
@@ -229,4 +230,60 @@ func joinKey(parts []string) string {
 		result += p
 	}
 	return result
+}
+
+// canSinglePassStats returns true if all stats are simple filter-count or
+// compound (StatsAnd/StatsOr) expressions that can be evaluated per-row
+// without needing the full filtered set (i.e. no aggregate functions).
+func canSinglePassStats(stats []*StatsExpr) bool {
+	for _, s := range stats {
+		if s.Function != "" {
+			return false // aggregate (sum/avg/min/max/std) needs all rows
+		}
+	}
+	return true
+}
+
+// evaluateStatsSinglePass merges filter evaluation and stats counting into
+// a single iteration over rows.  This avoids materializing the filtered
+// slice, cutting memory allocations and iteration count in half for the
+// common pattern of ungrouped filter-count stats.
+func evaluateStatsSinglePass(q *Query, rows []interface{}, table *Table, provider *api.StateProvider) []float64 {
+	results := make([]float64, len(q.Stats))
+
+	// Pre-resolve column pointers and contexts for each stat
+	type statInfo struct {
+		col *Column
+		ctx *compareCtx
+	}
+	infos := make([]statInfo, len(q.Stats))
+	for i, s := range q.Stats {
+		if len(s.SubStats) == 0 {
+			infos[i] = statInfo{
+				col: table.Columns[s.Column],
+				ctx: &compareCtx{compiledRe: s.CompiledRe},
+			}
+		}
+	}
+
+	for _, row := range rows {
+		if !evaluateFilters(q.Filters, row, table, provider) {
+			continue
+		}
+		for i, s := range q.Stats {
+			if len(s.SubStats) > 0 {
+				// Compound stat (StatsAnd/StatsOr)
+				if evaluateCompoundStatRow(s, row, table, provider) {
+					results[i]++
+				}
+			} else {
+				col := infos[i].col
+				if col != nil && compareValue(col.ExtractValue(row, provider), s.Operator, s.Value, infos[i].ctx) {
+					results[i]++
+				}
+			}
+		}
+	}
+
+	return results
 }

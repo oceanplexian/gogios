@@ -26,10 +26,14 @@ type Scheduler struct {
 	OnRetentionSave   func()
 	OnLogRotation     func()
 	OnProcessResult   func(cr *objects.CheckResult)
+	OnProcessResults  func(results []*objects.CheckResult) // batch version — preferred over OnProcessResult
 
 	// Counters
 	currentlyRunningServiceChecks int
 	lastTimeChange                time.Time
+
+	// Reusable batch buffer for result draining.
+	resultBatch []*objects.CheckResult
 }
 
 // Command represents an external command sent to the scheduler.
@@ -41,12 +45,13 @@ type Command struct {
 // New creates a new Scheduler.
 func New(cfg *objects.Config, hosts []*objects.Host, services []*objects.Service, resultCh chan *objects.CheckResult) *Scheduler {
 	s := &Scheduler{
-		cfg:       cfg,
-		hosts:     make(map[string]*objects.Host, len(hosts)),
-		services:  make(map[string]map[string]*objects.Service),
-		resultCh:  resultCh,
-		commandCh: make(chan Command, 100),
-		stopCh:    make(chan struct{}),
+		cfg:         cfg,
+		hosts:       make(map[string]*objects.Host, len(hosts)),
+		services:    make(map[string]map[string]*objects.Service),
+		resultCh:    resultCh,
+		commandCh:   make(chan Command, 100),
+		stopCh:      make(chan struct{}),
+		resultBatch: make([]*objects.CheckResult, 0, 1024),
 	}
 
 	for _, h := range hosts {
@@ -112,23 +117,30 @@ func (s *Scheduler) Stop() {
 // Run is the main event loop. It blocks until Stop() is called.
 func (s *Scheduler) Run() {
 	s.lastTimeChange = time.Now()
+	timer := time.NewTimer(time.Second)
 
 	for {
-		var timer *time.Timer
-		var timerCh <-chan time.Time
-
+		// Calculate wait time for next event.
 		if s.queue.Len() > 0 {
-			next := s.queue[0]
-			wait := time.Until(next.RunTime)
+			wait := time.Until(s.queue[0].RunTime)
 			if wait < 0 {
 				wait = 0
 			}
-			timer = time.NewTimer(wait)
-			timerCh = timer.C
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(wait)
 		} else {
-			// No events; poll every second
-			timer = time.NewTimer(time.Second)
-			timerCh = timer.C
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(time.Second)
 		}
 
 		select {
@@ -137,22 +149,69 @@ func (s *Scheduler) Run() {
 			return
 
 		case cr := <-s.resultCh:
-			timer.Stop()
-			if s.OnProcessResult != nil {
-				s.OnProcessResult(cr)
+			// Drain all available results into a batch.
+			s.resultBatch = append(s.resultBatch[:0], cr)
+			for {
+				select {
+				case cr2 := <-s.resultCh:
+					s.resultBatch = append(s.resultBatch, cr2)
+				default:
+					goto drained
+				}
 			}
+		drained:
+			s.processResultBatch(s.resultBatch)
 
 		case cmd := <-s.commandCh:
-			timer.Stop()
 			s.handleCommand(cmd)
 
-		case <-timerCh:
+		case <-timer.C:
 			s.fireReadyEvents()
 		}
 	}
 }
 
-// fireReadyEvents fires all events whose RunTime has arrived (within 100ms tolerance).
+// processResultBatch dispatches a batch of results using the batch callback
+// if available, otherwise falls back to individual processing.
+func (s *Scheduler) processResultBatch(batch []*objects.CheckResult) {
+	if s.OnProcessResults != nil {
+		s.OnProcessResults(batch)
+		return
+	}
+	if s.OnProcessResult != nil {
+		for _, cr := range batch {
+			s.OnProcessResult(cr)
+		}
+	}
+}
+
+// drainResults non-blocking drains all pending results from resultCh and
+// processes them. Called from within fireReadyEvents to keep workers flowing
+// during long dispatch bursts.
+func (s *Scheduler) drainResults() {
+	s.resultBatch = s.resultBatch[:0]
+	for {
+		select {
+		case cr := <-s.resultCh:
+			s.resultBatch = append(s.resultBatch, cr)
+		default:
+			if len(s.resultBatch) > 0 {
+				s.processResultBatch(s.resultBatch)
+			}
+			return
+		}
+	}
+}
+
+// drainInterval controls how often fireReadyEvents pauses to drain pending
+// check results. Lower values keep workers flowing at the cost of more
+// drain overhead; higher values improve dispatch throughput but risk
+// filling the result channel buffer.
+const drainInterval = 2048
+
+// fireReadyEvents fires events whose RunTime has arrived (within 100ms tolerance).
+// Every drainInterval events, it pauses to process pending results so that
+// workers don't stall waiting for resultCh buffer space during large bursts.
 func (s *Scheduler) fireReadyEvents() {
 	now := time.Now()
 	tolerance := 100 * time.Millisecond
@@ -165,10 +224,16 @@ func (s *Scheduler) fireReadyEvents() {
 	}
 	s.lastTimeChange = now
 
+	dispatched := 0
 	for s.queue.Len() > 0 {
 		next := s.queue[0]
 		if next.RunTime.After(now.Add(tolerance)) {
 			break
+		}
+
+		// Periodically drain results to keep workers from stalling.
+		if dispatched > 0 && dispatched%drainInterval == 0 {
+			s.drainResults()
 		}
 
 		// Check if event should run
@@ -177,11 +242,13 @@ func (s *Scheduler) fireReadyEvents() {
 			heap.Pop(&s.queue)
 			next.RunTime = now.Add(NudgeDuration())
 			heap.Push(&s.queue, next)
+			dispatched++
 			continue
 		}
 
 		heap.Pop(&s.queue)
 		s.handleEvent(next, now)
+		dispatched++
 
 		// Reschedule recurring events
 		if next.Recurring && next.Interval > 0 {
@@ -191,6 +258,11 @@ func (s *Scheduler) fireReadyEvents() {
 			}
 			heap.Push(&s.queue, next)
 		}
+	}
+
+	// Final drain after all events dispatched.
+	if dispatched > drainInterval {
+		s.drainResults()
 	}
 }
 

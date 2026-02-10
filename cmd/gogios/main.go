@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof" // exposes /debug/pprof on port 6060 for profiling
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -487,7 +489,7 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 	}
 
 	// --- Check executor ---
-	resultCh := make(chan *objects.CheckResult, 1024)
+	resultCh := make(chan *objects.CheckResult, 65536)
 	executor := checker.NewExecutor(mainCfg.MaxConcurrentChecks, resultCh)
 
 	// --- Service result handler ---
@@ -565,52 +567,53 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		executor.Submit(host.Name, "", expanded, timeout, options, objects.CheckTypeActive, host.Latency)
 	}
 
-	sched.OnProcessResult = func(cr *objects.CheckResult) {
-		if cr.ServiceDescription != "" {
-			// Service check result
-			svc := store.GetService(cr.HostName, cr.ServiceDescription)
-			if svc == nil {
-				return
+	// Batch result processing — takes the write lock once for the whole batch
+	// instead of per-result, dramatically reducing lock contention at scale.
+	sched.OnProcessResults = func(results []*objects.CheckResult) {
+		store.Mu.Lock()
+		defer store.Mu.Unlock()
+
+		for _, cr := range results {
+			if cr.ServiceDescription != "" {
+				svc := store.GetService(cr.HostName, cr.ServiceDescription)
+				if svc == nil {
+					continue
+				}
+				svcHandler.HandleResult(svc, cr)
+				sched.DecrementRunningServiceChecks()
+
+				nagLogger.LogVerbose(logging.VerboseChecks, "CHECK RESULT: %s;%s;%s;%d;%.3fs;%s",
+					cr.HostName, cr.ServiceDescription,
+					objects.ServiceStateName(svc.CurrentState),
+					cr.ReturnCode, cr.FinishTime.Sub(cr.StartTime).Seconds(), cr.Output)
+
+				downtimeMgr.CheckPendingFlexServiceDowntime(cr.HostName, cr.ServiceDescription, svc.CurrentState)
+
+				sched.AddEvent(&scheduler.Event{
+					Type:               scheduler.EventServiceCheck,
+					RunTime:            svc.NextCheck,
+					HostName:           cr.HostName,
+					ServiceDescription: cr.ServiceDescription,
+				})
+			} else {
+				host := store.GetHost(cr.HostName)
+				if host == nil {
+					continue
+				}
+				hostHandler.HandleResult(host, cr)
+
+				nagLogger.LogVerbose(logging.VerboseChecks, "CHECK RESULT: %s;%s;%d;%.3fs;%s",
+					cr.HostName, objects.HostStateName(host.CurrentState),
+					cr.ReturnCode, cr.FinishTime.Sub(cr.StartTime).Seconds(), cr.Output)
+
+				downtimeMgr.CheckPendingFlexHostDowntime(cr.HostName, host.CurrentState)
+
+				sched.AddEvent(&scheduler.Event{
+					Type:     scheduler.EventHostCheck,
+					RunTime:  host.NextCheck,
+					HostName: cr.HostName,
+				})
 			}
-			svcHandler.HandleResult(svc, cr)
-			sched.DecrementRunningServiceChecks()
-
-			nagLogger.LogVerbose(logging.VerboseChecks, "CHECK RESULT: %s;%s;%s;%d;%.3fs;%s",
-				cr.HostName, cr.ServiceDescription,
-				objects.ServiceStateName(svc.CurrentState),
-				cr.ReturnCode, cr.FinishTime.Sub(cr.StartTime).Seconds(), cr.Output)
-
-			// Check if a flexible downtime should start
-			downtimeMgr.CheckPendingFlexServiceDowntime(cr.HostName, cr.ServiceDescription, svc.CurrentState)
-
-			// Reschedule service check
-			sched.AddEvent(&scheduler.Event{
-				Type:               scheduler.EventServiceCheck,
-				RunTime:            svc.NextCheck,
-				HostName:           cr.HostName,
-				ServiceDescription: cr.ServiceDescription,
-			})
-		} else {
-			// Host check result
-			host := store.GetHost(cr.HostName)
-			if host == nil {
-				return
-			}
-			hostHandler.HandleResult(host, cr)
-
-			nagLogger.LogVerbose(logging.VerboseChecks, "CHECK RESULT: %s;%s;%d;%.3fs;%s",
-				cr.HostName, objects.HostStateName(host.CurrentState),
-				cr.ReturnCode, cr.FinishTime.Sub(cr.StartTime).Seconds(), cr.Output)
-
-			// Check if a flexible downtime should start
-			downtimeMgr.CheckPendingFlexHostDowntime(cr.HostName, host.CurrentState)
-
-			// Reschedule host check
-			sched.AddEvent(&scheduler.Event{
-				Type:     scheduler.EventHostCheck,
-				RunTime:  host.NextCheck,
-				HostName: cr.HostName,
-			})
 		}
 	}
 
@@ -646,6 +649,8 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 
 		// Register common command handlers
 		registerCommandHandlers(cmdProcessor, store, globalState, sched, notifEngine, commentMgr, downtimeMgr, nagLogger, resultCh)
+		// Synchronize command handler state mutations with livestatus readers
+		cmdProcessor.StateMu = &store.Mu
 
 		if err := cmdProcessor.Start(); err != nil {
 			nagLogger.Log("Warning: Failed to start command processor: %v", err)
@@ -736,6 +741,9 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 			}
 		}
 	}()
+
+	// --- pprof debug endpoint ---
+	go func() { http.ListenAndServe("127.0.0.1:6060", nil) }()
 
 	// --- Run main event loop (blocks until Stop) ---
 	sched.Run()
