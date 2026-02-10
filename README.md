@@ -654,4 +654,4 @@ If something doesn't work, it's a bug. File it.
 
 ## License
 
-Private.
+[MIT](LICENSE)
