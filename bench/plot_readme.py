@@ -8,8 +8,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-LIGHT_BG = '#f6f8fa'  # GitHub light mode card bg — used as subtle reference only
-
 def read_csv(path):
     with open(path) as f:
         return list(csv.DictReader(f))
@@ -18,8 +16,9 @@ def parse(rows, key):
     return [float(r[key]) for r in rows]
 
 def style_ax(ax):
-    """Style axes for transparent-bg README graphs."""
-    ax.set_facecolor('none')
+    """Style axes with semi-transparent white fill so text is readable on both
+    GitHub light and dark themes."""
+    ax.set_facecolor((1, 1, 1, 0.85))
     for spine in ax.spines.values():
         spine.set_color('#586069')
         spine.set_linewidth(0.8)
@@ -30,8 +29,8 @@ def style_ax(ax):
     ax.grid(True, alpha=0.25, color='#586069', linewidth=0.5)
 
 def save(fig, path):
-    fig.patch.set_alpha(0.0)
-    fig.savefig(path, dpi=150, transparent=True, bbox_inches='tight', pad_inches=0.15)
+    fig.patch.set_facecolor((1, 1, 1, 0.85))
+    fig.savefig(path, dpi=150, bbox_inches='tight', pad_inches=0.2)
     plt.close(fig)
     print(f"  Saved {path}")
 
@@ -61,7 +60,7 @@ def main():
     ax.set_title('Check Throughput', fontsize=13, fontweight='bold')
     ax.set_xlabel('Number of Services')
     ax.set_ylabel('Checks/sec')
-    ax.legend(loc='best', framealpha=0.8, fontsize=9)
+    ax.legend(loc='best', framealpha=0.95, fontsize=9)
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
     save(fig, os.path.join(out, "check_throughput.png"))
 
@@ -76,7 +75,7 @@ def main():
     ax.set_title('Memory Usage (RSS)', fontsize=13, fontweight='bold')
     ax.set_xlabel('Number of Services')
     ax.set_ylabel('MB')
-    ax.legend(loc='best', framealpha=0.8, fontsize=9)
+    ax.legend(loc='best', framealpha=0.95, fontsize=9)
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
     save(fig, os.path.join(out, "memory_usage.png"))
 
@@ -89,7 +88,7 @@ def main():
     ax.set_title('Startup Time', fontsize=13, fontweight='bold')
     ax.set_xlabel('Number of Services')
     ax.set_ylabel('ms')
-    ax.legend(loc='best', framealpha=0.8, fontsize=9)
+    ax.legend(loc='best', framealpha=0.95, fontsize=9)
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
     save(fig, os.path.join(out, "startup_time.png"))
 
@@ -110,7 +109,7 @@ def main():
         ax.set_title(title, fontsize=12, fontweight='bold')
         ax.set_xlabel('Number of Services')
         ax.set_ylabel('Requests/sec')
-        ax.legend(loc='best', framealpha=0.8, fontsize=9)
+        ax.legend(loc='best', framealpha=0.95, fontsize=9)
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
 
     fig.tight_layout(rect=[0, 0, 1, 0.93])
@@ -132,7 +131,7 @@ def main():
         ax.set_title(title, fontsize=12, fontweight='bold')
         ax.set_xlabel('Number of Services')
         ax.set_ylabel('P95 Latency (ms)')
-        ax.legend(loc='best', framealpha=0.8, fontsize=9)
+        ax.legend(loc='best', framealpha=0.95, fontsize=9)
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
 
     fig.tight_layout(rect=[0, 0, 1, 0.93])
