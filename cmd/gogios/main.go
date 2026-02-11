@@ -570,11 +570,35 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 
 	// Batch result processing — takes the write lock once for the whole batch
 	// instead of per-result, dramatically reducing lock contention at scale.
+	// nrdpTracker is set after the NRDP server starts; the closure
+	// below captures the pointer so dynamic registration just works
+	// once the server is live.
+	var nrdpTracker *nrdp.DynamicTracker
+
 	sched.OnProcessResults = func(results []*objects.CheckResult) {
 		store.Mu.Lock()
 		defer store.Mu.Unlock()
 
 		for _, cr := range results {
+			// Dynamic NRDP registration: create missing hosts/services
+			// under the store lock we already hold — no extra sync.
+			if cr.DynamicRegister && nrdpTracker != nil {
+				if cr.ServiceDescription != "" {
+					nrdpTracker.EnsureService(cr.HostName, cr.ServiceDescription)
+				} else {
+					nrdpTracker.EnsureHost(cr.HostName)
+				}
+				if host := store.GetHost(cr.HostName); host != nil {
+					host.LastSeen = cr.FinishTime
+				}
+				if cr.ServiceDescription != "" {
+					if svc := store.GetService(cr.HostName, cr.ServiceDescription); svc != nil {
+						svc.LastSeen = cr.FinishTime
+					}
+				}
+				nrdpTracker.TouchRecord(cr.HostName, cr.ServiceDescription)
+			}
+
 			if cr.ServiceDescription != "" {
 				svc := store.GetService(cr.HostName, cr.ServiceDescription)
 				if svc == nil {
@@ -713,6 +737,7 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 			SSLKey:         mainCfg.NRDPSSLKey,
 		}
 		nrdpServer = nrdp.New(nrdpCfg, store, resultCh, nagLogger)
+		nrdpTracker = nrdpServer.Tracker() // wire into OnProcessResults closure
 		if err := nrdpServer.Start(); err != nil {
 			nagLogger.Log("Warning: Failed to start NRDP server: %v", err)
 		} else {

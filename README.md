@@ -19,7 +19,7 @@
 
 Zero dependencies. No CGIs. No Apache. No NEB modules. No PHP. No Perl. No tears.
 
-Just one binary that reads your existing `nagios.cfg` and does everything the ~200k lines of C did, except it compiles in 2 seconds, doesn't mass-`fork()` itself to death, and ingests **37,000 passive check results per second** -flat from 5k to 100k dynamically-registered services. Your entire fleet updated in under 3 seconds. Nagios can't do that on its best day with a tailwind.
+Just one binary that reads your existing `nagios.cfg` and does everything the ~200k lines of C did, except it compiles in 2 seconds, doesn't mass-`fork()` itself to death, and ingests **356,000 passive check results per second** at 5k services, staying above 43,000/sec even at 100k dynamically-registered services. Nagios can't do that on its best day with a tailwind.
 
 ---
 
@@ -154,7 +154,7 @@ NRDP passive check ingestion was benchmarked from 100 to 100,000 dynamically-cre
   <img src="assets/readme/nrdp_throughput.png" alt="NRDP Throughput" width="700">
 </p>
 
-**Result:** Sustained ~37,000 passive results/sec from 5k to 100k dynamic services. At this rate, 100k services can be fully updated in under 3 seconds.
+**Result:** The NRDP handler is fully lock-free — dynamic registration is deferred to the scheduler goroutine, eliminating per-request mutex contention. Peak throughput hits 356k results/sec at 5k services, staying above 43k/sec even at 100k dynamically-registered services.
 
 ### Batch Latency & Memory
 
@@ -163,21 +163,21 @@ NRDP passive check ingestion was benchmarked from 100 to 100,000 dynamically-cre
   <img src="assets/readme/nrdp_memory.png" alt="NRDP Memory" width="600">
 </p>
 
-P95 batch latency stays under 50ms for batches of 100 results up to 10k services. At 50k+ services with batch sizes of 500, latency increases to ~380ms per batch - still well within acceptable range since each batch carries 500 results.
+P95 batch latency stays under 4ms for batches of 100 results up to 5k services. At 50k+ services with batch sizes of 500, latency increases to ~340ms per batch — still well within acceptable range since each batch carries 500 results.
 
-Memory scales linearly with the number of dynamically-registered objects, matching the active check memory profile.
+Memory scales linearly with the number of dynamically-registered objects, staying under 200MB even at 100k services.
 
 ### Raw Numbers
 
 | Unique Services | Total Submitted | Batch Size | Concurrency | Results/sec | P95 Batch (ms) | RSS |
 |----------------|----------------|------------|-------------|-------------|----------------|-----|
-| 100 | 1,000 | 10 | 1 | 17,468 | 0.8 | 26MB |
-| 500 | 5,000 | 50 | 2 | 28,944 | 8.1 | 45MB |
-| 1,000 | 10,000 | 100 | 4 | 34,314 | 23.6 | 58MB |
-| 5,000 | 49,600 | 100 | 8 | 37,221 | 39.3 | 178MB |
-| 10,000 | 100,000 | 100 | 10 | 36,724 | 48.0 | 315MB |
-| 50,000 | 200,000 | 500 | 20 | 37,729 | 373.3 | 600MB |
-| 100,000 | 400,000 | 500 | 20 | 37,643 | 385.5 | 1.2GB |
+| 100 | 1,000 | 10 | 1 | 25,285 | 0.5 | 25MB |
+| 500 | 5,000 | 50 | 2 | 113,637 | 1.3 | 42MB |
+| 1,000 | 10,000 | 100 | 4 | 248,891 | 2.7 | 48MB |
+| 5,000 | 49,600 | 100 | 8 | 356,078 | 3.4 | 128MB |
+| 10,000 | 100,000 | 100 | 10 | 128,309 | 37.4 | 164MB |
+| 50,000 | 200,000 | 500 | 20 | 50,913 | 338.8 | 162MB |
+| 100,000 | 400,000 | 500 | 20 | 43,574 | 341.8 | 201MB |
 
 ### Running the NRDP Benchmark
 

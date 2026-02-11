@@ -266,7 +266,7 @@ func TestStatusClamping(t *testing.T) {
 }
 
 func TestDynamicRegistration(t *testing.T) {
-	s, store, resultCh := testServer(t, "", true)
+	s, _, resultCh := testServer(t, "", true)
 
 	jsonBody := `{"checkresults":[{"type":"service","hostname":"dynamic-host","servicename":"dynamic-svc","status":0,"output":"ok"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/nrdp/", strings.NewReader(jsonBody))
@@ -279,30 +279,94 @@ func TestDynamicRegistration(t *testing.T) {
 		t.Fatalf("status = %d", w.Code)
 	}
 
-	// Drain channel
+	// The handler no longer creates hosts/services itself — it sets
+	// DynamicRegister on the CheckResult so the scheduler callback
+	// can create them under its existing store lock.
 	select {
-	case <-resultCh:
+	case cr := <-resultCh:
+		if !cr.DynamicRegister {
+			t.Error("DynamicRegister = false, want true")
+		}
+		if cr.HostName != "dynamic-host" {
+			t.Errorf("HostName = %q, want dynamic-host", cr.HostName)
+		}
+		if cr.ServiceDescription != "dynamic-svc" {
+			t.Errorf("ServiceDescription = %q, want dynamic-svc", cr.ServiceDescription)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("no result")
 	}
+}
 
-	// Check that host and service were created
-	store.Mu.RLock()
-	defer store.Mu.RUnlock()
-	host := store.GetHost("dynamic-host")
-	if host == nil {
-		t.Fatal("dynamic host not created")
+func TestDynamicRegistrationDisabled(t *testing.T) {
+	s, _, resultCh := testServer(t, "", false)
+
+	jsonBody := `{"checkresults":[{"type":"service","hostname":"h","servicename":"s","status":0,"output":"ok"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/nrdp/", strings.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "127.0.0.1:12345"
+	w := httptest.NewRecorder()
+	s.handleNRDP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d", w.Code)
 	}
-	if !host.Dynamic {
-		t.Error("host.Dynamic = false, want true")
+
+	select {
+	case cr := <-resultCh:
+		if cr.DynamicRegister {
+			t.Error("DynamicRegister = true, want false when dynamic disabled")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no result")
 	}
-	svc := store.GetService("dynamic-host", "dynamic-svc")
-	if svc == nil {
-		t.Fatal("dynamic service not created")
+}
+
+// BenchmarkHandleNRDP measures raw handler throughput with dynamic enabled.
+// After removing per-request store.Mu locks, the handler no longer contends
+// with concurrent readers (e.g. livestatus queries).
+func BenchmarkHandleNRDP(b *testing.B) {
+	store := objects.NewObjectStore()
+	resultCh := make(chan *objects.CheckResult, 65536)
+	dir := b.TempDir()
+	logger, err := logging.NewLogger(dir+"/test.log", dir, 0, false, &objects.GlobalState{})
+	if err != nil {
+		b.Fatal(err)
 	}
-	if !svc.Dynamic {
-		t.Error("svc.Dynamic = false, want true")
+	cfg := Config{
+		Listen:         ":0",
+		Path:           "/nrdp/",
+		DynamicEnabled: true,
+		DynamicTTL:     10 * time.Minute,
+		DynamicPrune:   1 * time.Minute,
 	}
+	s := New(cfg, store, resultCh, logger)
+
+	jsonBody := `{"checkresults":[{"type":"service","hostname":"h1","servicename":"s1","status":0,"output":"ok"}]}`
+
+	// Drain channel in background
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-resultCh:
+			case <-done:
+				return
+			}
+		}
+	}()
+	defer close(done)
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			req := httptest.NewRequest(http.MethodPost, "/nrdp/", strings.NewReader(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.RemoteAddr = "127.0.0.1:12345"
+			w := httptest.NewRecorder()
+			s.handleNRDP(w, req)
+		}
+	})
 }
 
 func TestResponseMirrorsFormat(t *testing.T) {

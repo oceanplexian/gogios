@@ -476,6 +476,7 @@ type CheckResult struct {
 	Latency            float64
 	ExecutionTime      float64
 	CheckOptions       int
+	DynamicRegister    bool // NRDP: auto-create host/service in scheduler goroutine
 }
 
 // Check option flags

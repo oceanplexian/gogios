@@ -55,6 +55,11 @@ func New(cfg Config, store *objects.ObjectStore, resultCh chan<- *objects.CheckR
 	return s
 }
 
+// Tracker returns the dynamic host/service tracker, or nil if dynamic
+// registration is disabled. Used by the scheduler to register objects
+// under its existing store lock.
+func (s *Server) Tracker() *DynamicTracker { return s.tracker }
+
 // Start begins listening for NRDP requests.
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
@@ -165,20 +170,10 @@ func (s *Server) handleNRDP(w http.ResponseWriter, r *http.Request) {
 
 		result.Source = source
 
-		// Dynamic registration if enabled
-		if s.tracker != nil && s.cfg.DynamicEnabled {
-			s.store.Mu.Lock()
-			if result.Servicename != "" {
-				s.tracker.EnsureService(result.Hostname, result.Servicename)
-			} else {
-				s.tracker.EnsureHost(result.Hostname)
-			}
-			s.store.Mu.Unlock()
-
-			s.tracker.Touch(result.Hostname, result.Servicename)
-		}
-
-		// Build check result and inject into pipeline
+		// Build check result and inject into pipeline.
+		// Dynamic registration (if enabled) is handled lock-free here;
+		// the scheduler's OnProcessResults callback creates missing
+		// hosts/services under its existing store.Mu write lock.
 		now := time.Now()
 		cr := &objects.CheckResult{
 			HostName:           result.Hostname,
@@ -189,6 +184,7 @@ func (s *Server) handleNRDP(w http.ResponseWriter, r *http.Request) {
 			StartTime:          result.Timestamp,
 			FinishTime:         now,
 			ExitedOK:           true,
+			DynamicRegister:    s.tracker != nil && s.cfg.DynamicEnabled,
 		}
 
 		select {

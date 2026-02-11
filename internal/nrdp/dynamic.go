@@ -101,22 +101,11 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 	d.mu.Unlock()
 }
 
-// Touch updates the last-seen timestamp for a host or service.
-// It acquires store.Mu write lock internally.
-func (d *DynamicTracker) Touch(hostname, servicename string) {
+// TouchRecord updates the last-seen timestamp in the tracker records map.
+// It does NOT acquire store.Mu; the caller is responsible for updating
+// Host.LastSeen / Service.LastSeen under the store lock if needed.
+func (d *DynamicTracker) TouchRecord(hostname, servicename string) {
 	now := time.Now()
-
-	d.store.Mu.Lock()
-	if host := d.store.GetHost(hostname); host != nil {
-		host.LastSeen = now
-	}
-	if servicename != "" {
-		if svc := d.store.GetService(hostname, servicename); svc != nil {
-			svc.LastSeen = now
-		}
-	}
-	d.store.Mu.Unlock()
-
 	d.mu.Lock()
 	if servicename != "" {
 		d.records[hostname+"\t"+servicename] = now

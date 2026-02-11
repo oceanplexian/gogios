@@ -102,7 +102,7 @@ func TestEnsureServiceIdempotent(t *testing.T) {
 	}
 }
 
-func TestTouchUpdatesLastSeen(t *testing.T) {
+func TestTouchRecordUpdatesTimestamp(t *testing.T) {
 	tracker, store := newTracker(t)
 
 	store.Mu.Lock()
@@ -113,23 +113,18 @@ func TestTouchUpdatesLastSeen(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	before := time.Now()
 
-	tracker.Touch("touchhost", "svc1")
+	tracker.TouchRecord("touchhost", "svc1")
 
-	store.Mu.RLock()
-	defer store.Mu.RUnlock()
-	host := store.GetHost("touchhost")
-	if host == nil {
-		t.Fatal("host not found")
+	// TouchRecord only updates the tracker records, not the store objects.
+	// Verify the record timestamp was updated.
+	tracker.mu.Lock()
+	ts, ok := tracker.records["touchhost\tsvc1"]
+	tracker.mu.Unlock()
+	if !ok {
+		t.Fatal("record not found")
 	}
-	if host.LastSeen.Before(before) {
-		t.Errorf("host.LastSeen = %v, want >= %v", host.LastSeen, before)
-	}
-	svc := store.GetService("touchhost", "svc1")
-	if svc == nil {
-		t.Fatal("service not found")
-	}
-	if svc.LastSeen.Before(before) {
-		t.Errorf("svc.LastSeen = %v, want >= %v", svc.LastSeen, before)
+	if ts.Before(before) {
+		t.Errorf("record timestamp = %v, want >= %v", ts, before)
 	}
 }
 
