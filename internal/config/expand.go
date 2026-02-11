@@ -287,7 +287,7 @@ func registerHosts(parser *ObjectParser, store *objects.ObjectStore) error {
 			Name:                       name,
 			DisplayName:                attrOr(obj, "display_name", name),
 			Alias:                      attrOr(obj, "alias", name),
-			Address:                    attrOr(obj, "address", ""),
+			Address:                    attrOr(obj, "address", name),
 			CheckInterval:              attrFloat(obj, "check_interval", 5.0),
 			RetryInterval:              attrFloat(obj, "retry_interval", 1.0),
 			MaxCheckAttempts:           attrInt(obj, "max_check_attempts", -2),

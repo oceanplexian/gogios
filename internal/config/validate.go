@@ -18,9 +18,6 @@ func Validate(store *objects.ObjectStore) []error {
 		if h.Alias == "" {
 			errs = append(errs, fmt.Errorf("host '%s': missing alias", h.Name))
 		}
-		if h.Address == "" {
-			errs = append(errs, fmt.Errorf("host '%s': missing address", h.Name))
-		}
 		if h.MaxCheckAttempts < 1 {
 			errs = append(errs, fmt.Errorf("host '%s': max_check_attempts must be >= 1 (got %d)", h.Name, h.MaxCheckAttempts))
 		}
