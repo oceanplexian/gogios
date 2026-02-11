@@ -176,9 +176,10 @@ type MainConfig struct {
 	NRDPListen         string // listen address, e.g. ":5668"
 	NRDPPath           string // URL path, default "/nrdp/"
 	NRDPTokenHash      string // bcrypt hash of accepted token
-	NRDPDynamicEnabled bool   // auto-register hosts/services from NRDP submissions
-	NRDPDynamicTTL     int    // seconds before stale dynamic objects are pruned (default 86400)
-	NRDPDynamicPrune   int    // seconds between prune runs (default 600)
+	NRDPDynamicEnabled          bool   // auto-register hosts/services from NRDP submissions
+	NRDPDynamicTTL              int    // seconds before stale dynamic objects are pruned (default 86400)
+	NRDPDynamicPrune            int    // seconds between prune runs (default 600)
+	NRDPDynamicHostCheckCommand string // check command for dynamic hosts (default "check-host-alive", empty=passive only)
 	NRDPSSLCert        string // TLS certificate file
 	NRDPSSLKey         string // TLS key file
 
@@ -248,8 +249,9 @@ func NewMainConfig() *MainConfig {
 		HostPerfdataFileMode:    'a',
 		ServicePerfdataFileMode: 'a',
 		NRDPPath:                "/nrdp/",
-		NRDPDynamicTTL:          86400,
-		NRDPDynamicPrune:        600,
+		NRDPDynamicTTL:              86400,
+		NRDPDynamicPrune:            600,
+		NRDPDynamicHostCheckCommand: "check-host-alive",
 	}
 }
 
@@ -361,6 +363,8 @@ func (c *MainConfig) setDirective(key, val string) error {
 		return setInt(&c.NRDPDynamicTTL, val)
 	case "nrdp_dynamic_prune_interval":
 		return setInt(&c.NRDPDynamicPrune, val)
+	case "nrdp_dynamic_host_check_command":
+		c.NRDPDynamicHostCheckCommand = val
 	case "nrdp_ssl_cert":
 		c.NRDPSSLCert = c.resolvePath(val)
 	case "nrdp_ssl_key":

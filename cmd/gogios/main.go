@@ -769,6 +769,23 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		}
 		nrdpServer = nrdp.New(nrdpCfg, store, resultCh, nagLogger)
 		nrdpTracker = nrdpServer.Tracker() // wire into OnProcessResults closure
+
+		// Configure dynamic host check command and scheduling callback.
+		if nrdpTracker != nil && mainCfg.NRDPDynamicHostCheckCommand != "" {
+			nrdpTracker.SetHostCheckCommand(mainCfg.NRDPDynamicHostCheckCommand)
+			nrdpTracker.OnScheduleHost = func(host *objects.Host) {
+				sched.RegisterHost(host)
+				host.NextCheck = time.Now().Add(time.Duration(host.CheckInterval*float64(cfg.IntervalLength)) * time.Second)
+				sched.AddEvent(&scheduler.Event{
+					Type:      scheduler.EventHostCheck,
+					RunTime:   host.NextCheck,
+					HostName:  host.Name,
+					Recurring: true,
+					Interval:  time.Duration(host.CheckInterval*float64(cfg.IntervalLength)) * time.Second,
+				})
+			}
+		}
+
 		if err := nrdpServer.Start(); err != nil {
 			nagLogger.Log("Warning: Failed to start NRDP server: %v", err)
 		} else {

@@ -431,6 +431,13 @@ func (s *Scheduler) compensateTimeChange(now time.Time) {
 	heap.Init(&s.queue)
 }
 
+// RegisterHost adds a host to the scheduler's internal lookup map so it
+// can be resolved when host check events fire. Use this for dynamically
+// created hosts after the scheduler has been initialized.
+func (s *Scheduler) RegisterHost(h *objects.Host) {
+	s.hosts[h.Name] = h
+}
+
 // AddEvent adds an event to the queue.
 func (s *Scheduler) AddEvent(e *Event) {
 	heap.Push(&s.queue, e)

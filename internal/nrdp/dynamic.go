@@ -18,6 +18,13 @@ type DynamicTracker struct {
 	interval time.Duration
 	stopCh   chan struct{}
 	logFunc  func(format string, args ...interface{})
+
+	// Host check configuration for dynamic hosts.
+	hostCheckCmd string // command name, e.g. "check-host-alive"; empty = passive only
+
+	// OnScheduleHost is called after a new dynamic host is created with
+	// active checks enabled, so the scheduler can enqueue a host check event.
+	OnScheduleHost func(host *objects.Host)
 }
 
 // NewDynamicTracker creates a tracker that auto-creates hosts/services and prunes
@@ -38,7 +45,16 @@ func (d *DynamicTracker) SetLogger(fn func(string, ...interface{})) {
 	d.logFunc = fn
 }
 
+// SetHostCheckCommand configures the check command name used for dynamic
+// hosts. If non-empty, dynamic hosts get active checks enabled with this
+// command. Pass empty string to keep hosts passive-only.
+func (d *DynamicTracker) SetHostCheckCommand(name string) {
+	d.hostCheckCmd = name
+}
+
 // EnsureHost creates a minimal dynamic host if it does not already exist.
+// If a host check command is configured, the host gets active checks
+// enabled and is scheduled for checking.
 // IMPORTANT: The caller must hold store.Mu write lock.
 func (d *DynamicTracker) EnsureHost(hostname string) {
 	if d.store.GetHost(hostname) != nil {
@@ -47,12 +63,15 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		d.mu.Unlock()
 		return
 	}
+
 	host := &objects.Host{
 		Name:                 hostname,
 		DisplayName:          hostname,
 		Alias:                hostname,
 		Address:              hostname,
-		MaxCheckAttempts:     1,
+		MaxCheckAttempts:     3,
+		CheckInterval:        5,
+		RetryInterval:        1,
 		PassiveChecksEnabled: true,
 		ActiveChecksEnabled:  false,
 		Dynamic:              true,
@@ -61,10 +80,27 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		CurrentState:         4, // pending
 		StateType:            objects.StateTypeHard,
 	}
+
+	// If a host check command is configured and exists in the store,
+	// enable active checks so the host gets pinged on schedule.
+	if d.hostCheckCmd != "" {
+		if cmd := d.store.GetCommand(d.hostCheckCmd); cmd != nil {
+			host.CheckCommand = cmd
+			host.ActiveChecksEnabled = true
+			host.ShouldBeScheduled = true
+		}
+	}
+
 	d.store.AddHost(host)
+
 	d.mu.Lock()
 	d.records[hostname] = time.Now()
 	d.mu.Unlock()
+
+	// Notify the scheduler to enqueue a check event for this host.
+	if host.ShouldBeScheduled && d.OnScheduleHost != nil {
+		d.OnScheduleHost(host)
+	}
 }
 
 // EnsureService creates a minimal dynamic service (and its host) if they do not exist.
