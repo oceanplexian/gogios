@@ -16,7 +16,6 @@ import (
 // RetentionWriter writes Nagios-compatible retention.dat files.
 type RetentionWriter struct {
 	Path      string
-	TempDir   string
 	Store     *objects.ObjectStore
 	Global    *objects.GlobalState
 	Comments  *downtime.CommentManager
@@ -26,10 +25,9 @@ type RetentionWriter struct {
 
 // Write atomically writes the retention.dat file.
 func (rw *RetentionWriter) Write() error {
-	dir := rw.TempDir
-	if dir == "" {
-		dir = filepath.Dir(rw.Path)
-	}
+	// Always create the temp file alongside the target so os.Rename
+	// never crosses filesystem boundaries.
+	dir := filepath.Dir(rw.Path)
 	tmp, err := os.CreateTemp(dir, "retention.dat.tmp.*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)

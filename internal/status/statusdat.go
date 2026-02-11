@@ -14,21 +14,19 @@ import (
 
 // StatusWriter writes Nagios-compatible status.dat files.
 type StatusWriter struct {
-	Path       string
-	TempDir    string
-	Store      *objects.ObjectStore
-	Global     *objects.GlobalState
-	Comments   *downtime.CommentManager
-	Downtimes  *downtime.DowntimeManager
-	Version    string
+	Path      string
+	Store     *objects.ObjectStore
+	Global    *objects.GlobalState
+	Comments  *downtime.CommentManager
+	Downtimes *downtime.DowntimeManager
+	Version   string
 }
 
 // Write atomically writes the status.dat file.
 func (sw *StatusWriter) Write() error {
-	dir := sw.TempDir
-	if dir == "" {
-		dir = filepath.Dir(sw.Path)
-	}
+	// Always create the temp file alongside the target so os.Rename
+	// never crosses filesystem boundaries.
+	dir := filepath.Dir(sw.Path)
 	tmp, err := os.CreateTemp(dir, "status.dat.tmp.*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)

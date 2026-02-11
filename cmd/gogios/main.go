@@ -457,7 +457,6 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 	// Status writer
 	statusWriter := &status.StatusWriter{
 		Path:      mainCfg.StatusFile,
-		TempDir:   mainCfg.TempPath,
 		Store:     store,
 		Global:    globalState,
 		Comments:  commentMgr,
@@ -467,8 +466,7 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 
 	// Retention writer/reader
 	retentionWriter := &status.RetentionWriter{
-		Path:      mainCfg.StateRetentionFile,
-		TempDir:   mainCfg.TempPath,
+		Path: mainCfg.StateRetentionFile,
 		Store:     store,
 		Global:    globalState,
 		Comments:  commentMgr,
