@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/oceanplexian/gogios/internal/downtime"
 	"github.com/oceanplexian/gogios/internal/logging"
 	"github.com/oceanplexian/gogios/internal/objects"
@@ -15,6 +17,11 @@ type StateProvider struct {
 	Logger         *logging.Logger
 	LogFile        string
 	LogArchivePath string
+
+	// LogTimeMin/LogTimeMax are optional hints extracted from query
+	// filters to limit which log files are loaded from disk.
+	LogTimeMin time.Time
+	LogTimeMax time.Time
 }
 
 // CommandSink is a callback for executing external commands from the API.

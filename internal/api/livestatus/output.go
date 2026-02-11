@@ -3,6 +3,7 @@ package livestatus
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,14 @@ func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 	table := Registry[q.Table]
 	if table == nil {
 		return errorResponse(q, 404, "Unknown table: "+q.Table)
+	}
+
+	// For the log table, extract time bounds from filters so we can skip
+	// archive files that fall outside the requested range.
+	if q.Table == "log" {
+		min, max := extractTimeBounds(q.Filters)
+		provider.LogTimeMin = min
+		provider.LogTimeMax = max
 	}
 
 	// Snapshot the row pointers under a brief read lock, then release.
@@ -249,6 +258,33 @@ func jsonSafe(v interface{}) interface{} {
 	default:
 		return v
 	}
+}
+
+// extractTimeBounds walks the top-level AND-combined filters looking for
+// simple "time >= N" / "time < N" constraints.  These are used as hints
+// to skip log files that cannot contain matching entries.
+func extractTimeBounds(filters []*FilterExpr) (min, max time.Time) {
+	for _, f := range filters {
+		if f.Column != "time" || len(f.SubFilters) > 0 {
+			continue
+		}
+		v, err := strconv.ParseInt(f.Value, 10, 64)
+		if err != nil {
+			continue
+		}
+		t := time.Unix(v, 0)
+		switch f.Operator {
+		case ">=", ">":
+			if min.IsZero() || t.After(min) {
+				min = t
+			}
+		case "<=", "<":
+			if max.IsZero() || t.Before(max) {
+				max = t
+			}
+		}
+	}
+	return
 }
 
 func errorResponse(q *Query, code int, msg string) string {

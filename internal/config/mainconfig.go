@@ -41,7 +41,8 @@ type MainConfig struct {
 	LogPassiveChecks    bool
 	LogInitialStates    bool
 	LogCurrentStates    bool
-	LogRotationMethod   byte // n/h/d/w/m
+	LogRotationMethod   byte   // n/h/d/w/m
+	MaxLogFileSize      uint64 // bytes; 0=unlimited (default 100MB)
 	DebugLevel          int
 	DebugVerbosity      int
 	MaxDebugFileSize    uint64
@@ -197,7 +198,8 @@ func NewMainConfig() *MainConfig {
 		LogPassiveChecks:    true,
 		LogInitialStates:    false,
 		LogCurrentStates:    true,
-		LogRotationMethod:   'n',
+		LogRotationMethod:   'd',
+		MaxLogFileSize:      100 * 1024 * 1024, // 100MB
 		ServiceCheckTimeout: 60,
 		HostCheckTimeout:    30,
 		EventHandlerTimeout: 30,
@@ -563,6 +565,8 @@ func (c *MainConfig) setDirective(key, val string) error {
 	// Unsigned ints
 	case "max_debug_file_size":
 		return setUint64(&c.MaxDebugFileSize, val)
+	case "max_log_file_size":
+		return setUint64(&c.MaxLogFileSize, val)
 	case "max_check_result_file_age":
 		return setUint64(&c.MaxCheckResultFileAge, val)
 	case "cached_host_check_horizon":

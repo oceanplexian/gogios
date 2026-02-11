@@ -26,11 +26,14 @@ type Logger struct {
 	logPath        string
 	archivePath    string
 	rotationMethod int
+	maxFileSize    uint64 // 0=unlimited
+	written        uint64 // bytes written since last rotation
 	useSyslog      bool
 	useStdout      bool
 	syslogWriter   *syslog.Writer
 	global         *objects.GlobalState
 	Verbosity      int
+	OnSizeRotate   func() // called after size-triggered rotation (to reschedule timed event)
 }
 
 // NewLogger creates a new Nagios logger.
@@ -41,6 +44,12 @@ func NewLogger(logPath, archivePath string, rotationMethod int, useSyslog bool, 
 		rotationMethod: rotationMethod,
 		useSyslog:      useSyslog,
 		global:         global,
+	}
+
+	// Seed written counter from existing file size so size-based rotation
+	// works correctly across restarts.
+	if info, err := os.Stat(logPath); err == nil {
+		l.written = uint64(info.Size())
 	}
 
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -81,6 +90,14 @@ func (l *Logger) SetStdout(enabled bool) {
 	l.mu.Unlock()
 }
 
+// SetMaxFileSize sets the maximum log file size in bytes. When exceeded,
+// the log is rotated automatically regardless of the time-based schedule.
+func (l *Logger) SetMaxFileSize(size uint64) {
+	l.mu.Lock()
+	l.maxFileSize = size
+	l.mu.Unlock()
+}
+
 // Log writes a timestamped message to the log file.
 func (l *Logger) Log(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
@@ -88,15 +105,24 @@ func (l *Logger) Log(format string, args ...interface{}) {
 
 	l.mu.Lock()
 	if l.logFile != nil {
-		l.logFile.WriteString(line)
+		n, _ := l.logFile.WriteString(line)
+		l.written += uint64(n)
 	}
 	if l.useStdout {
 		os.Stdout.WriteString(line)
 	}
+	needsRotate := l.maxFileSize > 0 && l.written >= l.maxFileSize
 	l.mu.Unlock()
 
 	if l.useSyslog && l.syslogWriter != nil {
 		l.syslogWriter.Info(msg)
+	}
+
+	if needsRotate {
+		l.Rotate()
+		if l.OnSizeRotate != nil {
+			l.OnSizeRotate()
+		}
 	}
 }
 
@@ -278,6 +304,8 @@ func (l *Logger) Rotate() error {
 	if err != nil {
 		return fmt.Errorf("open new log: %w", err)
 	}
+
+	l.written = 0
 
 	// Log the rotation event
 	fmt.Fprintf(l.logFile, "[%d] LOG ROTATION: %s\n", time.Now().Unix(), archivePath)

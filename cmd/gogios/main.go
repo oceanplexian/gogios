@@ -419,6 +419,10 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 	}
 	defer nagLogger.Close()
 
+	if mainCfg.MaxLogFileSize > 0 {
+		nagLogger.SetMaxFileSize(mainCfg.MaxLogFileSize)
+	}
+
 	// In foreground mode, echo all log output to stdout
 	if !daemonMode {
 		nagLogger.SetStdout(true)
@@ -661,6 +665,33 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 	sched.OnLogRotation = func() {
 		if err := nagLogger.Rotate(); err != nil {
 			log.Printf("Error rotating log: %v", err)
+		}
+	}
+
+	// Schedule the initial log rotation event if time-based rotation is enabled.
+	if logRotation != objects.LogRotationNone {
+		nextRot := nagLogger.NextRotationTime(time.Now())
+		if !nextRot.IsZero() {
+			sched.AddEvent(&scheduler.Event{
+				Type:      scheduler.EventLogRotation,
+				RunTime:   nextRot,
+				Recurring: true,
+				Interval:  nextRot.Sub(time.Now()),
+			})
+		}
+	}
+
+	// When size-based rotation fires, reschedule the timed rotation event
+	// so the interval resets from the rotation point.
+	nagLogger.OnSizeRotate = func() {
+		if logRotation != objects.LogRotationNone {
+			nextRot := nagLogger.NextRotationTime(time.Now())
+			if !nextRot.IsZero() {
+				sched.AddEvent(&scheduler.Event{
+					Type:    scheduler.EventLogRotation,
+					RunTime: nextRot,
+				})
+			}
 		}
 	}
 

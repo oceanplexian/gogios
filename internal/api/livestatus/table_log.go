@@ -34,7 +34,7 @@ func logTable() *Table {
 			if p.LogFile == "" {
 				return nil
 			}
-			entries := loadAllLogs(p.LogFile, p.LogArchivePath)
+			entries := loadAllLogs(p.LogFile, p.LogArchivePath, p.LogTimeMin, p.LogTimeMax)
 			rows := make([]interface{}, len(entries))
 			for i, e := range entries {
 				rows[i] = e
@@ -80,40 +80,100 @@ func logTable() *Table {
 }
 
 // loadAllLogs reads the current log file and any archived logs.
-func loadAllLogs(logFile, archivePath string) []*logEntry {
+// When minTime/maxTime are non-zero, archive files outside the range are
+// skipped and individual lines outside the range are discarded during parsing.
+func loadAllLogs(logFile, archivePath string, minTime, maxTime time.Time) []*logEntry {
 	var entries []*logEntry
 
 	// Read archived logs first (older entries)
 	if archivePath != "" {
-		archiveFiles := findArchiveFiles(archivePath)
+		archiveFiles := findArchiveFiles(archivePath, minTime, maxTime)
 		for _, af := range archiveFiles {
-			entries = append(entries, parseLogFile(af)...)
+			entries = append(entries, parseLogFile(af, minTime, maxTime)...)
 		}
 	}
 
 	// Read current log file (newest entries)
-	entries = append(entries, parseLogFile(logFile)...)
+	entries = append(entries, parseLogFile(logFile, minTime, maxTime)...)
 
 	return entries
 }
 
-// findArchiveFiles returns sorted archive log file paths (oldest first).
-func findArchiveFiles(archivePath string) []string {
+// archiveTime extracts the timestamp from archive filenames like
+// "nagios-MM-DD-YYYY-HH.log" and returns it. Returns zero time on
+// parse failure.
+func archiveTime(name string) time.Time {
+	// Strip nagios- prefix and .log suffix
+	base := filepath.Base(name)
+	base = strings.TrimPrefix(base, "nagios-")
+	base = strings.TrimSuffix(base, ".log")
+	t, err := time.Parse("01-02-2006-15", base)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// findArchiveFiles returns sorted archive log file paths (oldest first),
+// filtered to only include files that could contain entries in the
+// [minTime, maxTime] range.
+func findArchiveFiles(archivePath string, minTime, maxTime time.Time) []string {
 	matches, err := filepath.Glob(filepath.Join(archivePath, "*.log"))
 	if err != nil {
 		return nil
 	}
 	// Sort by filename so older archives come first
 	sort.Strings(matches)
-	return matches
+
+	if minTime.IsZero() && maxTime.IsZero() {
+		return matches
+	}
+
+	// Filter archives by timestamp. Each archive covers the period from
+	// its timestamp to the next archive's timestamp. We keep a file if
+	// its period overlaps [minTime, maxTime].
+	var filtered []string
+	for i, path := range matches {
+		fileTime := archiveTime(path)
+		if fileTime.IsZero() {
+			// Can't parse — include to be safe
+			filtered = append(filtered, path)
+			continue
+		}
+
+		// Determine the end of this file's time range: the start of the
+		// next archive, or "now" for the last archive.
+		var fileEnd time.Time
+		if i+1 < len(matches) {
+			fileEnd = archiveTime(matches[i+1])
+		}
+		if fileEnd.IsZero() {
+			fileEnd = time.Now()
+		}
+
+		// Skip if file ends before our min
+		if !minTime.IsZero() && fileEnd.Before(minTime) {
+			continue
+		}
+		// Skip if file starts after our max
+		if !maxTime.IsZero() && fileTime.After(maxTime) {
+			continue
+		}
+
+		filtered = append(filtered, path)
+	}
+	return filtered
 }
 
-func parseLogFile(path string) []*logEntry {
+func parseLogFile(path string, minTime, maxTime time.Time) []*logEntry {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
 	}
 	defer f.Close()
+
+	hasMin := !minTime.IsZero()
+	hasMax := !maxTime.IsZero()
 
 	var entries []*logEntry
 	scanner := bufio.NewScanner(f)
@@ -122,9 +182,16 @@ func parseLogFile(path string) []*logEntry {
 	for scanner.Scan() {
 		line := scanner.Text()
 		e := parseLogLine(line)
-		if e != nil {
-			entries = append(entries, e)
+		if e == nil {
+			continue
 		}
+		if hasMin && e.Time.Before(minTime) {
+			continue
+		}
+		if hasMax && e.Time.After(maxTime) {
+			continue
+		}
+		entries = append(entries, e)
 	}
 	return entries
 }
