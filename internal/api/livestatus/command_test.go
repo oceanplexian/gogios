@@ -1,7 +1,10 @@
 package livestatus
 
 import (
+	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/oceanplexian/gogios/internal/api"
 )
@@ -65,5 +68,61 @@ func TestHandleCommand_NoArgs(t *testing.T) {
 	handleCommand("COMMAND SOME_CMD", sink)
 	if len(gotArgs) != 0 {
 		t.Errorf("args = %v, want empty", gotArgs)
+	}
+}
+
+func TestHandleConnection_BulkCommands(t *testing.T) {
+	// Simulate Thruk sending multiple commands separated by \n\n on one connection.
+	var mu sync.Mutex
+	var commands []string
+	sink := api.CommandSink(func(name string, args []string) {
+		mu.Lock()
+		commands = append(commands, name)
+		mu.Unlock()
+	})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	srv := &Server{
+		quit:     make(chan struct{}),
+		provider: &api.StateProvider{},
+		cmdSink:  sink,
+	}
+
+	done := make(chan struct{})
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		srv.handleConnection(conn)
+		close(done)
+	}()
+
+	conn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Send 3 commands separated by blank lines, like Thruk does
+	bulk := "COMMAND [1234567890] ENABLE_SVC_NOTIFICATIONS;host1;svc1\n\n" +
+		"COMMAND [1234567890] ENABLE_SVC_NOTIFICATIONS;host2;svc2\n\n" +
+		"COMMAND [1234567890] ENABLE_SVC_NOTIFICATIONS;host3;svc3\n\n"
+	conn.Write([]byte(bulk))
+	conn.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handleConnection did not finish in time")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(commands) != 3 {
+		t.Errorf("got %d commands, want 3: %v", len(commands), commands)
 	}
 }

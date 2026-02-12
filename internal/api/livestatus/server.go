@@ -118,8 +118,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 				s.provider.Logger.LogVerbose(logging.VerboseLivestatus, "LIVESTATUS: %s from %s", firstLine, conn.RemoteAddr())
 			}
 			handleCommand(firstLine, s.cmdSink)
-			// Per spec: commands are fire-and-forget, no response
-			return
+			// Per spec: commands are fire-and-forget, no response.
+			// Continue the loop to process additional commands on the
+			// same connection (Thruk sends bulk commands this way).
+			continue
 		}
 
 		q, err := ParseQuery(request)
