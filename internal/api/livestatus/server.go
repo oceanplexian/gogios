@@ -16,13 +16,14 @@ import (
 // Server is the Livestatus query server. It listens on a Unix domain socket
 // and/or a TCP address and handles LQL queries.
 type Server struct {
-	socketPath string
-	tcpAddr    string
-	provider   *api.StateProvider
-	cmdSink    api.CommandSink
-	listeners  []net.Listener
-	wg         sync.WaitGroup
-	quit       chan struct{}
+	socketPath    string
+	tcpAddr       string
+	provider      *api.StateProvider
+	cmdSink       api.CommandSink
+	batchCmdSink  api.BatchCommandSink
+	listeners     []net.Listener
+	wg            sync.WaitGroup
+	quit          chan struct{}
 }
 
 // New creates a new Livestatus server.
@@ -32,6 +33,13 @@ func New(socketPath, tcpAddr string) *Server {
 		tcpAddr:    tcpAddr,
 		quit:       make(chan struct{}),
 	}
+}
+
+// SetBatchCommandSink sets an optional batch command sink for high-throughput
+// command processing. When set, bulk commands on a single connection are
+// dispatched in one batch (single lock acquisition) instead of individually.
+func (s *Server) SetBatchCommandSink(sink api.BatchCommandSink) {
+	s.batchCmdSink = sink
 }
 
 // Start begins listening for connections.
@@ -96,6 +104,11 @@ func (s *Server) acceptLoop(ln net.Listener) {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	// Collect commands for batch dispatch. When a connection sends only
+	// commands (typical for Thruk bulk operations), we read them all first
+	// and dispatch in a single batch to avoid per-command lock overhead.
+	var pendingCmds []api.CommandEntry
+
 	reader := bufio.NewReader(conn)
 	for {
 		request, err := readRequest(reader)
@@ -105,9 +118,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 					s.provider.Logger.Log("Livestatus read error: %v", err)
 				}
 			}
+			// Connection done — flush any pending commands.
+			s.flushCommands(pendingCmds, conn)
 			return
 		}
 		if strings.TrimSpace(request) == "" {
+			s.flushCommands(pendingCmds, conn)
 			return
 		}
 
@@ -117,12 +133,18 @@ func (s *Server) handleConnection(conn net.Conn) {
 			if s.provider.Logger != nil {
 				s.provider.Logger.LogVerbose(logging.VerboseLivestatus, "LIVESTATUS: %s from %s", firstLine, conn.RemoteAddr())
 			}
-			handleCommand(firstLine, s.cmdSink)
+			// Queue the command for batch dispatch instead of executing immediately.
+			entry := parseCommandEntry(firstLine)
+			if entry != nil {
+				pendingCmds = append(pendingCmds, *entry)
+			}
 			// Per spec: commands are fire-and-forget, no response.
-			// Continue the loop to process additional commands on the
-			// same connection (Thruk sends bulk commands this way).
 			continue
 		}
+
+		// About to handle a query — flush any accumulated commands first.
+		s.flushCommands(pendingCmds, conn)
+		pendingCmds = nil
 
 		q, err := ParseQuery(request)
 		if err != nil {
@@ -145,6 +167,52 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 	}
+}
+
+// flushCommands dispatches accumulated commands. Uses batch dispatch when
+// available (single lock), falls back to per-command dispatch otherwise.
+func (s *Server) flushCommands(cmds []api.CommandEntry, conn net.Conn) {
+	if len(cmds) == 0 {
+		return
+	}
+	if s.batchCmdSink != nil {
+		if s.provider.Logger != nil && len(cmds) > 1 {
+			s.provider.Logger.LogVerbose(logging.VerboseLivestatus,
+				"LIVESTATUS: batch-dispatching %d commands from %s", len(cmds), conn.RemoteAddr())
+		}
+		s.batchCmdSink(cmds)
+		return
+	}
+	// Fallback: dispatch one at a time
+	for _, c := range cmds {
+		s.cmdSink(c.Name, c.Args)
+	}
+}
+
+// parseCommandEntry extracts the command name and args from a COMMAND line
+// without invoking the sink. Returns nil for unparseable input.
+func parseCommandEntry(request string) *api.CommandEntry {
+	line := strings.TrimPrefix(request, "COMMAND ")
+	line = strings.TrimSpace(line)
+
+	// Skip optional timestamp
+	if strings.HasPrefix(line, "[") {
+		idx := strings.Index(line, "]")
+		if idx >= 0 {
+			line = strings.TrimSpace(line[idx+1:])
+		}
+	}
+
+	parts := strings.SplitN(line, ";", 2)
+	name := parts[0]
+	if name == "" {
+		return nil
+	}
+	var args []string
+	if len(parts) > 1 {
+		args = strings.Split(parts[1], ";")
+	}
+	return &api.CommandEntry{Name: name, Args: args}
 }
 
 func readRequest(reader *bufio.Reader) (string, error) {

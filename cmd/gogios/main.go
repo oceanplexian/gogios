@@ -740,6 +740,21 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 				cmdProcessor.Dispatch(name, args)
 			}
 		})
+		batchCmdSink := api.BatchCommandSink(func(cmds []api.CommandEntry) {
+			if cmdProcessor != nil {
+				batch := make([]extcmd.Command, len(cmds))
+				now := time.Now().Unix()
+				for i, c := range cmds {
+					batch[i] = extcmd.Command{
+						Timestamp: now,
+						Name:      c.Name,
+						Args:      c.Args,
+					}
+				}
+				cmdProcessor.DispatchBatch(batch)
+			}
+		})
+		livestatusServer.SetBatchCommandSink(batchCmdSink)
 		if err := livestatusServer.Start(apiState, cmdSink); err != nil {
 			nagLogger.Log("Warning: Failed to start Livestatus server: %v", err)
 		} else {

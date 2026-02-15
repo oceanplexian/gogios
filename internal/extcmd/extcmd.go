@@ -89,6 +89,43 @@ func (p *Processor) Dispatch(name string, args []string) {
 	}
 }
 
+// DispatchBatch invokes multiple command handlers under a single StateMu
+// write-lock acquisition. This dramatically reduces lock contention when
+// a client (e.g. Thruk) sends hundreds or thousands of commands on one
+// connection — instead of N lock/unlock cycles, we do exactly one.
+func (p *Processor) DispatchBatch(cmds []Command) {
+	if len(cmds) == 0 {
+		return
+	}
+
+	// Resolve all handlers up front under a single read-lock.
+	type resolved struct {
+		cmd     Command
+		handler Handler
+	}
+	p.mu.RLock()
+	batch := make([]resolved, 0, len(cmds))
+	for _, c := range cmds {
+		if h, ok := p.handlers[c.Name]; ok {
+			batch = append(batch, resolved{cmd: c, handler: h})
+		}
+	}
+	p.mu.RUnlock()
+
+	if len(batch) == 0 {
+		return
+	}
+
+	// Take the write lock once for the entire batch.
+	if p.StateMu != nil {
+		p.StateMu.Lock()
+		defer p.StateMu.Unlock()
+	}
+	for i := range batch {
+		batch[i].handler(&batch[i].cmd)
+	}
+}
+
 // RegisterHandlers registers multiple handlers at once.
 func (p *Processor) RegisterHandlers(handlers map[string]Handler) {
 	p.mu.Lock()

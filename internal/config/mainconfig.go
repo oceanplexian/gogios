@@ -251,7 +251,7 @@ func NewMainConfig() *MainConfig {
 		NRDPPath:                "/nrdp/",
 		NRDPDynamicTTL:              86400,
 		NRDPDynamicPrune:            600,
-		NRDPDynamicHostCheckCommand: "check-host-alive",
+		NRDPDynamicHostCheckCommand: "", // empty = passive only; avoids fping storms for NRDP-registered hosts
 	}
 }
 

@@ -26,3 +26,13 @@ type StateProvider struct {
 
 // CommandSink is a callback for executing external commands from the API.
 type CommandSink func(name string, args []string)
+
+// BatchCommandSink executes multiple commands under a single lock acquisition.
+// Each element is [name string, args []string].
+type BatchCommandSink func(cmds []CommandEntry)
+
+// CommandEntry holds a single command name and its arguments for batch dispatch.
+type CommandEntry struct {
+	Name string
+	Args []string
+}

@@ -10,6 +10,11 @@ import (
 	"github.com/oceanplexian/gogios/internal/api"
 )
 
+// defaultLogLimit caps the number of log entries returned when the client
+// does not specify a Limit header. This prevents enormous responses when
+// log files contain hundreds of thousands of lines.
+const defaultLogLimit = 5000
+
 // ExecuteQuery runs a parsed query against the provider and returns the response string.
 func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 	table := Registry[q.Table]
@@ -70,9 +75,15 @@ func ExecuteQuery(q *Query, provider *api.StateProvider) string {
 		}
 	}
 
-	// Limit
-	if q.Limit >= 0 && q.Limit < len(filtered) {
-		filtered = filtered[:q.Limit]
+	// Limit — for the log table, enforce a default cap so we don't send
+	// back hundreds of thousands of lines when no limit was specified.
+	limit := q.Limit
+	if limit < 0 && q.Table == "log" {
+		limit = defaultLogLimit
+	}
+	if limit >= 0 && limit < len(filtered) {
+		// Keep the most recent entries (log rows are oldest-first after sort).
+		filtered = filtered[len(filtered)-limit:]
 	}
 
 	// Determine columns to output

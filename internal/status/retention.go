@@ -440,6 +440,9 @@ func (rr *RetentionReader) applyHost(f map[string]string) {
 	if h == nil {
 		return
 	}
+	// Only override config-level toggles (notifications, active/passive checks)
+	// if an admin explicitly changed them (modified_attributes != 0).
+	modAttrs := parseUint64(f["modified_attributes"])
 	if v, ok := f["current_state"]; ok {
 		h.CurrentState = parseInt(v)
 	}
@@ -491,8 +494,16 @@ func (rr *RetentionReader) applyHost(f map[string]string) {
 	if v, ok := f["current_notification_id"]; ok {
 		h.CurrentNotificationID = parseUint64(v)
 	}
-	if v, ok := f["notifications_enabled"]; ok {
-		h.NotificationsEnabled = v == "1"
+	if modAttrs != 0 {
+		if v, ok := f["notifications_enabled"]; ok {
+			h.NotificationsEnabled = v == "1"
+		}
+		if v, ok := f["active_checks_enabled"]; ok {
+			h.ActiveChecksEnabled = v == "1"
+		}
+		if v, ok := f["passive_checks_enabled"]; ok {
+			h.PassiveChecksEnabled = v == "1"
+		}
 	}
 	if v, ok := f["problem_has_been_acknowledged"]; ok {
 		h.ProblemAcknowledged = v == "1"
@@ -533,6 +544,7 @@ func (rr *RetentionReader) applyService(f map[string]string) {
 	if s == nil {
 		return
 	}
+	modAttrs := parseUint64(f["modified_attributes"])
 	if v, ok := f["current_state"]; ok {
 		s.CurrentState = parseInt(v)
 	}
@@ -584,8 +596,16 @@ func (rr *RetentionReader) applyService(f map[string]string) {
 	if v, ok := f["current_notification_id"]; ok {
 		s.CurrentNotificationID = parseUint64(v)
 	}
-	if v, ok := f["notifications_enabled"]; ok {
-		s.NotificationsEnabled = v == "1"
+	if modAttrs != 0 {
+		if v, ok := f["notifications_enabled"]; ok {
+			s.NotificationsEnabled = v == "1"
+		}
+		if v, ok := f["active_checks_enabled"]; ok {
+			s.ActiveChecksEnabled = v == "1"
+		}
+		if v, ok := f["passive_checks_enabled"]; ok {
+			s.PassiveChecksEnabled = v == "1"
+		}
 	}
 	if v, ok := f["problem_has_been_acknowledged"]; ok {
 		s.ProblemAcknowledged = v == "1"

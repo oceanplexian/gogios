@@ -74,6 +74,10 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		RetryInterval:        1,
 		PassiveChecksEnabled: true,
 		ActiveChecksEnabled:  false,
+		NotificationsEnabled: true,
+		NotificationOptions:  objects.OptDown | objects.OptUnreachable | objects.OptRecovery,
+		NotificationInterval: 120,
+		ContactGroups:        d.defaultContactGroups(),
 		Dynamic:              true,
 		LastSeen:             time.Now(),
 		ShouldBeScheduled:    false,
@@ -123,6 +127,10 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 		MaxCheckAttempts:     1,
 		PassiveChecksEnabled: true,
 		ActiveChecksEnabled:  false,
+		NotificationsEnabled: true,
+		NotificationOptions:  objects.OptWarning | objects.OptCritical | objects.OptUnknown | objects.OptRecovery,
+		NotificationInterval: 60,
+		ContactGroups:        d.defaultContactGroups(),
 		Dynamic:              true,
 		LastSeen:             time.Now(),
 		ShouldBeScheduled:    false,
@@ -226,6 +234,18 @@ func (d *DynamicTracker) StartPruner() {
 			}
 		}
 	}()
+}
+
+// defaultContactGroups returns the admins and discord-admins contact groups
+// from the object store, for use as defaults on dynamically created objects.
+func (d *DynamicTracker) defaultContactGroups() []*objects.ContactGroup {
+	var cgs []*objects.ContactGroup
+	for _, name := range []string{"admins", "discord-admins"} {
+		if cg := d.store.GetContactGroup(name); cg != nil {
+			cgs = append(cgs, cg)
+		}
+	}
+	return cgs
 }
 
 // Stop signals the pruner goroutine to exit.
