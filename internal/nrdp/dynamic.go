@@ -57,7 +57,20 @@ func (d *DynamicTracker) SetHostCheckCommand(name string) {
 // enabled and is scheduled for checking.
 // IMPORTANT: The caller must hold store.Mu write lock.
 func (d *DynamicTracker) EnsureHost(hostname string) {
-	if d.store.GetHost(hostname) != nil {
+	if existing := d.store.GetHost(hostname); existing != nil {
+		// Heal pre-existing dynamic hosts the same way we do for services.
+		if cg := d.store.GetContactGroup("bridge-admins"); cg != nil {
+			has := false
+			for _, g := range existing.ContactGroups {
+				if g != nil && g.Name == "bridge-admins" {
+					has = true
+					break
+				}
+			}
+			if !has {
+				existing.ContactGroups = append(existing.ContactGroups, cg)
+			}
+		}
 		d.mu.Lock()
 		d.records[hostname] = time.Now()
 		d.mu.Unlock()
@@ -112,7 +125,23 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 	d.EnsureHost(hostname)
 
-	if d.store.GetService(hostname, servicename) != nil {
+	if existing := d.store.GetService(hostname, servicename); existing != nil {
+		// Ensure bridge-admins is attached to pre-existing dynamic services so
+		// the nagios-bridge gets every state-change notification. Services
+		// created before bridge-admins existed have a stale contact_groups
+		// list in retention.dat; this opportunistically heals it.
+		if cg := d.store.GetContactGroup("bridge-admins"); cg != nil {
+			has := false
+			for _, g := range existing.ContactGroups {
+				if g != nil && g.Name == "bridge-admins" {
+					has = true
+					break
+				}
+			}
+			if !has {
+				existing.ContactGroups = append(existing.ContactGroups, cg)
+			}
+		}
 		d.mu.Lock()
 		d.records[hostname+"\t"+servicename] = time.Now()
 		d.mu.Unlock()
@@ -240,7 +269,7 @@ func (d *DynamicTracker) StartPruner() {
 // from the object store, for use as defaults on dynamically created objects.
 func (d *DynamicTracker) defaultContactGroups() []*objects.ContactGroup {
 	var cgs []*objects.ContactGroup
-	for _, name := range []string{"admins", "discord-admins"} {
+	for _, name := range []string{"admins", "discord-admins", "bridge-admins"} {
 		if cg := d.store.GetContactGroup(name); cg != nil {
 			cgs = append(cgs, cg)
 		}
