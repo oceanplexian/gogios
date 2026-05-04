@@ -2,12 +2,15 @@
 package logging
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log/syslog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/oceanplexian/gogios/internal/objects"
@@ -294,9 +297,16 @@ func (l *Logger) Rotate() error {
 	}
 
 	if err := os.Rename(l.logPath, archivePath); err != nil {
-		// If rename fails, reopen the log
-		l.logFile, _ = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		return fmt.Errorf("rotate log: %w", err)
+		// archive dir on a different filesystem (common in containers): copy + truncate
+		if errors.Is(err, syscall.EXDEV) {
+			if cerr := copyAndTruncate(l.logPath, archivePath); cerr != nil {
+				l.logFile, _ = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				return fmt.Errorf("rotate log: %w", cerr)
+			}
+		} else {
+			l.logFile, _ = os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			return fmt.Errorf("rotate log: %w", err)
+		}
 	}
 
 	var err error
@@ -312,6 +322,30 @@ func (l *Logger) Rotate() error {
 	fmt.Fprintf(l.logFile, "[%d] LOG VERSION: 2.0\n", time.Now().Unix())
 
 	return nil
+}
+
+// copyAndTruncate copies src to dst then truncates src. Used when src and dst
+// are on different filesystems and os.Rename returns EXDEV.
+func copyAndTruncate(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Truncate(src, 0)
 }
 
 // NextRotationTime returns the next time the log should be rotated.
