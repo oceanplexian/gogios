@@ -3,6 +3,9 @@ package checker
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"syscall"
 	"testing"
@@ -96,13 +99,46 @@ func TestShellWorkerTimeout(t *testing.T) {
 	}
 	defer sw.Close()
 
-	_, _, err = sw.Run("sleep 60", 1*time.Second)
-	if err == nil {
-		t.Fatal("expected error on timeout, got nil")
+	_, _, err = sw.Run("sleep 60", 500*time.Millisecond)
+	if !errors.Is(err, ErrCheckTimeout) {
+		t.Fatalf("expected ErrCheckTimeout, got %v", err)
 	}
 	if !sw.alive {
-		// Shell should be dead after timeout (process group killed)
-		// This is expected behavior
+		t.Fatal("worker must stay alive after a check-level timeout")
+	}
+
+	// Worker should be reusable for the next command.
+	output, code, err := sw.Run("echo recovered", 5*time.Second)
+	if err != nil {
+		t.Fatalf("Run after timeout: %v", err)
+	}
+	if code != 0 || output != "recovered" {
+		t.Fatalf("post-timeout result: code=%d output=%q", code, output)
+	}
+}
+
+func TestShellWorkerTimeoutKillsSubshellProcessGroup(t *testing.T) {
+	// A check that backgrounds a long-lived grandchild must have the
+	// grandchild killed too — kill -pgid is what makes that happen.
+	sw, err := newShellWorker(testSentinel())
+	if err != nil {
+		t.Fatalf("newShellWorker: %v", err)
+	}
+	defer sw.Close()
+
+	marker := fmt.Sprintf("/tmp/gogios-pgrp-test-%d", time.Now().UnixNano())
+	// Spawn a sleeper that touches marker on exit. If the pgrp kill works,
+	// the sleeper dies before marker is written.
+	cmd := fmt.Sprintf("(sleep 30; touch %s) & echo started; wait", marker)
+	_, _, err = sw.Run(cmd, 500*time.Millisecond)
+	if !errors.Is(err, ErrCheckTimeout) {
+		t.Fatalf("expected ErrCheckTimeout, got %v", err)
+	}
+	// Give the kernel a moment to deliver SIGKILL.
+	time.Sleep(200 * time.Millisecond)
+	if _, statErr := os.Stat(marker); statErr == nil {
+		os.Remove(marker)
+		t.Fatal("grandchild survived timeout — process group kill failed")
 	}
 }
 

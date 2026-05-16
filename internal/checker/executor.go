@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -169,16 +170,19 @@ func (e *Executor) runViaShell(sw *shellWorker, job checkJob) *objects.CheckResu
 	cr.ExecutionTime = cr.FinishTime.Sub(cr.StartTime).Seconds()
 
 	if err != nil {
-		// Shell-level failure (timeout killed the shell, crash, etc.)
-		// Check if it was a timeout
-		if !sw.alive {
-			// Shell was killed — likely timeout
+		// Check-level timeout: subshell was killed, worker is still alive.
+		if errors.Is(err, ErrCheckTimeout) {
 			cr.EarlyTimeout = true
 			cr.ReturnCode = 2
-			cr.Output = fmt.Sprintf("(Check timed out after %.0f seconds)", job.timeout.Seconds())
+			msg := fmt.Sprintf("(Check timed out after %.0f seconds)", job.timeout.Seconds())
+			if output != "" {
+				msg += "\n" + output
+			}
+			cr.Output = msg
 			return cr
 		}
-		return nil // signal caller to retry/fallback
+		// Worker-level failure (shell crashed) — signal caller to respawn/fallback.
+		return nil
 	}
 
 	cr.ReturnCode = exitCode
