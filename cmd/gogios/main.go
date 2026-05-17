@@ -12,6 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	// Sets GOMAXPROCS to match the container's cgroup CPU quota at startup.
+	// Without this Go sees the host's CPU count and oversubscribes its
+	// scheduler, eating throughput to CFS throttling and context switches.
+	_ "go.uber.org/automaxprocs"
+
 	"github.com/oceanplexian/gogios/internal/api"
 	"github.com/oceanplexian/gogios/internal/api/livestatus"
 	"github.com/oceanplexian/gogios/internal/checker"
