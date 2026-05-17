@@ -28,12 +28,24 @@ var ErrCheckTimeout = errors.New("check timed out")
 // the sentinel line carries the subshell's exit status and the worker loops
 // to the next command.
 //
+// Each check runs through gogios-runcheck, a tiny shim that places the
+// command inside a fresh PID namespace. When SIGKILL hits the subshell's
+// pgroup on timeout, the shim dies, and the kernel atomically tears down
+// the namespace — every plugin descendant (e.g. fping under check_fping)
+// dies and is reaped inside the namespace. No reparenting to PID 1, no
+// orphan zombies. If the shim is missing we fall back to plain `eval`.
+//
 // bash (not /bin/sh) is required because dash refuses to enable job control
 // without a controlling terminal.
 const shellScript = `set -m
 s="$1"
+if [ -x /usr/local/bin/gogios-runcheck ]; then
+  runner='exec /usr/local/bin/gogios-runcheck "$c"'
+else
+  runner='eval "$c"'
+fi
 while IFS= read -r c; do
-  ( eval "$c" ) </dev/null 2>&1 3>&- &
+  ( eval "$runner" ) </dev/null 2>&1 3>&- &
   pid=$!
   printf '%d\n' "$pid" >&3
   wait "$pid" 2>/dev/null
