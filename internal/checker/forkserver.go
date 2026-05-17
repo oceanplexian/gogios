@@ -40,12 +40,12 @@ var ErrCheckTimeout = errors.New("check timed out")
 const shellScript = `set -m
 s="$1"
 if [ -x /usr/local/bin/gogios-runcheck ]; then
-  runner='exec /usr/local/bin/gogios-runcheck "$c"'
+  spawn() { ( exec /usr/local/bin/gogios-runcheck "$1" ) </dev/null 2>&1 3>&- & }
 else
-  runner='eval "$c"'
+  spawn() { ( eval "$1" ) </dev/null 2>&1 3>&- & }
 fi
 while IFS= read -r c; do
-  ( eval "$runner" ) </dev/null 2>&1 3>&- &
+  spawn "$c"
   pid=$!
   printf '%d\n' "$pid" >&3
   wait "$pid" 2>/dev/null

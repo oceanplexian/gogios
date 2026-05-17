@@ -8,10 +8,14 @@
 // Exit: same code as the inner shell.
 package main
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 func main() {
 	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: gogios-runcheck <shell-command>")
 		os.Exit(2)
 	}
 	os.Exit(run(os.Args[1]))
