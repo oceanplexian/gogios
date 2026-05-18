@@ -121,6 +121,14 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 			// via NRDP — make sure it lands in the generated cfg so a future
 			// restart (after the static def is removed, say) doesn't lose it.
 			d.writeGeneratedConfigLocked()
+			// Queue a check event with the scheduler. Hosts loaded from the
+			// generated cfg AFTER startup never went through InitTimingLoop,
+			// so without this nudge they sit with next_check=0 forever. The
+			// orphan-check backstop (KANB-108) catches them eventually, but
+			// this kicks the first check immediately.
+			if existing.ShouldBeScheduled && d.OnScheduleHost != nil {
+				d.OnScheduleHost(existing)
+			}
 		}
 		d.mu.Unlock()
 		return
