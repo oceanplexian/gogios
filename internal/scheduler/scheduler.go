@@ -376,20 +376,53 @@ func (s *Scheduler) handleCommand(cmd Command) {
 }
 
 // checkOrphans finds checks that have been executing too long and reschedules them.
+// It also sweeps for "limbo" services/hosts — entities that ShouldBeScheduled and have
+// ActiveChecksEnabled but are not currently executing and whose NextCheck is well in the
+// past. This backstops the case where a check event got lost from the heap (e.g. after
+// a wedged state, time-change compensation gone wrong, or any future bug we haven't
+// found yet). The worst case here is a single duplicate event, which is harmless.
 func (s *Scheduler) checkOrphans(now time.Time) {
 	svcTimeout := time.Duration(s.cfg.ServiceCheckTimeout) * time.Second
 	hostTimeout := time.Duration(s.cfg.HostCheckTimeout) * time.Second
 	reaperSlack := time.Duration(s.cfg.CheckReaperInterval)*time.Second + 10*time.Minute
 
+	il := s.cfg.IntervalLength
+	if il <= 0 {
+		il = 60
+	}
+
 	for _, svcMap := range s.services {
 		for _, svc := range svcMap {
-			if !svc.IsExecuting {
+			if svc.IsExecuting {
+				expected := svc.NextCheck.Add(time.Duration(svc.Latency*float64(time.Second)) + svcTimeout + reaperSlack)
+				if expected.Before(now) {
+					svc.IsExecuting = false
+					s.currentlyRunningServiceChecks--
+					svc.NextCheck = now
+					heap.Push(&s.queue, &Event{
+						Type:               EventServiceCheck,
+						RunTime:            now,
+						HostName:           svc.Host.Name,
+						ServiceDescription: svc.Description,
+						CheckOptions:       objects.CheckOptionOrphanCheck,
+					})
+				}
 				continue
 			}
-			expected := svc.NextCheck.Add(time.Duration(svc.Latency*float64(time.Second)) + svcTimeout + reaperSlack)
-			if expected.Before(now) {
-				svc.IsExecuting = false
-				s.currentlyRunningServiceChecks--
+
+			// Limbo backstop: service should be actively scheduled but has no
+			// pending event firing it. Re-queue if NextCheck is way in the past.
+			if !svc.ShouldBeScheduled || !svc.ActiveChecksEnabled {
+				continue
+			}
+			if svc.CheckInterval <= 0 {
+				continue
+			}
+			intervalSecs := svc.CheckInterval * float64(il)
+			limboThreshold := now.Add(-time.Duration(2 * intervalSecs * float64(time.Second)))
+			if svc.NextCheck.IsZero() || svc.NextCheck.Before(limboThreshold) {
+				log.Printf("Limbo service detected: %s/%s next_check=%v — re-queuing",
+					svc.Host.Name, svc.Description, svc.NextCheck)
 				svc.NextCheck = now
 				heap.Push(&s.queue, &Event{
 					Type:               EventServiceCheck,
@@ -403,12 +436,33 @@ func (s *Scheduler) checkOrphans(now time.Time) {
 	}
 
 	for _, host := range s.hosts {
-		if !host.IsExecuting {
+		if host.IsExecuting {
+			expected := host.NextCheck.Add(time.Duration(host.Latency*float64(time.Second)) + hostTimeout + reaperSlack)
+			if expected.Before(now) {
+				host.IsExecuting = false
+				host.NextCheck = now
+				heap.Push(&s.queue, &Event{
+					Type:         EventHostCheck,
+					RunTime:      now,
+					HostName:     host.Name,
+					CheckOptions: objects.CheckOptionOrphanCheck,
+				})
+			}
 			continue
 		}
-		expected := host.NextCheck.Add(time.Duration(host.Latency*float64(time.Second)) + hostTimeout + reaperSlack)
-		if expected.Before(now) {
-			host.IsExecuting = false
+
+		// Limbo backstop for hosts — same logic as services above.
+		if !host.ShouldBeScheduled || !host.ActiveChecksEnabled {
+			continue
+		}
+		if host.CheckInterval <= 0 {
+			continue
+		}
+		intervalSecs := host.CheckInterval * float64(il)
+		limboThreshold := now.Add(-time.Duration(2 * intervalSecs * float64(time.Second)))
+		if host.NextCheck.IsZero() || host.NextCheck.Before(limboThreshold) {
+			log.Printf("Limbo host detected: %s next_check=%v — re-queuing",
+				host.Name, host.NextCheck)
 			host.NextCheck = now
 			heap.Push(&s.queue, &Event{
 				Type:         EventHostCheck,

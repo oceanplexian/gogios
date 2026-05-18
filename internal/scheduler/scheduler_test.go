@@ -135,6 +135,141 @@ func TestScheduleServiceCheck_Deconfliction(t *testing.T) {
 	}
 }
 
+func TestCheckOrphans_LimboServiceReQueued(t *testing.T) {
+	cfg := objects.DefaultConfig()
+
+	host := &objects.Host{
+		Name:                "limbo-host",
+		CheckInterval:       5,
+		ActiveChecksEnabled: true,
+		ShouldBeScheduled:   true,
+	}
+	svc := &objects.Service{
+		Host:                host,
+		Description:         "limbo-svc",
+		CheckInterval:       5, // 5 * IntervalLength(60) = 300s; limbo threshold = 600s
+		ActiveChecksEnabled: true,
+		ShouldBeScheduled:   true,
+		IsExecuting:         false,
+		NextCheck:           time.Now().Add(-2 * time.Hour),
+	}
+
+	s := New(cfg, []*objects.Host{host}, []*objects.Service{svc}, make(chan *objects.CheckResult, 1))
+	heap.Init(&s.queue)
+
+	now := time.Now()
+	s.checkOrphans(now)
+
+	// Find a service-check event for the limbo service.
+	var found *Event
+	for _, e := range s.queue {
+		if e.Type == EventServiceCheck &&
+			e.HostName == "limbo-host" &&
+			e.ServiceDescription == "limbo-svc" {
+			found = e
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected EventServiceCheck for limbo service to be pushed, queue has %d events", s.queue.Len())
+	}
+	if found.CheckOptions&objects.CheckOptionOrphanCheck == 0 {
+		t.Errorf("expected re-queued event to have CheckOptionOrphanCheck, got %d", found.CheckOptions)
+	}
+	if found.RunTime.After(now.Add(time.Second)) {
+		t.Errorf("expected RunTime ~= now, got %v (now=%v)", found.RunTime, now)
+	}
+	if !svc.NextCheck.Equal(found.RunTime) && svc.NextCheck.Before(now) {
+		t.Errorf("expected svc.NextCheck to be advanced to now, got %v", svc.NextCheck)
+	}
+}
+
+func TestCheckOrphans_LimboHostReQueued(t *testing.T) {
+	cfg := objects.DefaultConfig()
+
+	host := &objects.Host{
+		Name:                "limbo-host",
+		CheckInterval:       5,
+		ActiveChecksEnabled: true,
+		ShouldBeScheduled:   true,
+		IsExecuting:         false,
+		NextCheck:           time.Now().Add(-2 * time.Hour),
+	}
+
+	s := New(cfg, []*objects.Host{host}, nil, make(chan *objects.CheckResult, 1))
+	heap.Init(&s.queue)
+
+	now := time.Now()
+	s.checkOrphans(now)
+
+	var found *Event
+	for _, e := range s.queue {
+		if e.Type == EventHostCheck && e.HostName == "limbo-host" {
+			found = e
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected EventHostCheck for limbo host to be pushed, queue has %d events", s.queue.Len())
+	}
+	if found.CheckOptions&objects.CheckOptionOrphanCheck == 0 {
+		t.Errorf("expected re-queued event to have CheckOptionOrphanCheck, got %d", found.CheckOptions)
+	}
+}
+
+func TestCheckOrphans_HealthyServiceNotReQueued(t *testing.T) {
+	cfg := objects.DefaultConfig()
+
+	host := &objects.Host{Name: "h1", CheckInterval: 5, ActiveChecksEnabled: true, ShouldBeScheduled: true}
+	svc := &objects.Service{
+		Host:                host,
+		Description:         "healthy",
+		CheckInterval:       5,
+		ActiveChecksEnabled: true,
+		ShouldBeScheduled:   true,
+		IsExecuting:         false,
+		NextCheck:           time.Now().Add(30 * time.Second),
+	}
+
+	s := New(cfg, []*objects.Host{host}, []*objects.Service{svc}, make(chan *objects.CheckResult, 1))
+	heap.Init(&s.queue)
+
+	s.checkOrphans(time.Now())
+
+	for _, e := range s.queue {
+		if e.Type == EventServiceCheck && e.ServiceDescription == "healthy" {
+			t.Errorf("healthy service should not be re-queued by checkOrphans")
+		}
+	}
+}
+
+func TestCheckOrphans_DisabledServiceNotReQueued(t *testing.T) {
+	cfg := objects.DefaultConfig()
+
+	host := &objects.Host{Name: "h1", CheckInterval: 5, ActiveChecksEnabled: true, ShouldBeScheduled: true}
+	// Stale NextCheck but checks are disabled — should not re-queue.
+	svc := &objects.Service{
+		Host:                host,
+		Description:         "disabled",
+		CheckInterval:       5,
+		ActiveChecksEnabled: false,
+		ShouldBeScheduled:   true,
+		IsExecuting:         false,
+		NextCheck:           time.Now().Add(-2 * time.Hour),
+	}
+
+	s := New(cfg, []*objects.Host{host}, []*objects.Service{svc}, make(chan *objects.CheckResult, 1))
+	heap.Init(&s.queue)
+
+	s.checkOrphans(time.Now())
+
+	for _, e := range s.queue {
+		if e.Type == EventServiceCheck && e.ServiceDescription == "disabled" {
+			t.Errorf("service with ActiveChecksEnabled=false should not be re-queued")
+		}
+	}
+}
+
 func TestRecurringEvents(t *testing.T) {
 	now := time.Now()
 	events := RecurringEvents(now, 10, 60, 60, 60, 60, 60, 30, true, true, false)
