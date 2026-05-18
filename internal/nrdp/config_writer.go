@@ -95,18 +95,25 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 		fmt.Fprintf(&buf, "    host_name               %s\n", h)
 		fmt.Fprintf(&buf, "    alias                   %s\n", h)
 		fmt.Fprintf(&buf, "    address                 %s\n", h)
-		fmt.Fprintf(&buf, "    max_check_attempts      3\n")
+		// max_check_attempts=1 + passive-only matches what NRDP submitters
+		// expect: every passive result is authoritative, no soft-state
+		// retries. Active checks are only enabled when SetHostCheckCommand
+		// is called with a non-empty command name — many NRDP-discovered
+		// hosts have NO DNS A record (fn2ai-east, fn2-prod-*) so running
+		// fping against them returns "Invalid hostname/address" and flips
+		// state DOWN even though passive results are landing fine.
+		fmt.Fprintf(&buf, "    max_check_attempts      1\n")
 		fmt.Fprintf(&buf, "    check_interval          5\n")
 		fmt.Fprintf(&buf, "    retry_interval          1\n")
 		fmt.Fprintf(&buf, "    check_period            24x7\n")
-		// active_checks_enabled tracks the runtime decision in EnsureHost: if
-		// SetHostCheckCommand was called with a non-empty command name and that
-		// command is registered, dynamic hosts get active checks. Mirror that
-		// here so the restart-loaded config matches the runtime config.
 		if d.hostCheckCmd != "" {
 			fmt.Fprintf(&buf, "    check_command           %s\n", d.hostCheckCmd)
 			fmt.Fprintf(&buf, "    active_checks_enabled   1\n")
 		} else {
+			// check_command is required by nagios's parser even for
+			// passive-only hosts. check_dummy never runs at active_checks=0
+			// but keeps the field non-empty.
+			fmt.Fprintf(&buf, "    check_command           check_dummy!0!OK\n")
 			fmt.Fprintf(&buf, "    active_checks_enabled   0\n")
 		}
 		fmt.Fprintf(&buf, "    passive_checks_enabled  1\n")
