@@ -86,6 +86,22 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 				existing.ContactGroups = append(existing.ContactGroups, cg)
 			}
 		}
+		// Unstick PENDING dynamic hosts. A host whose submitter is currently
+		// reaching us is alive by definition; without this nudge a passive-only
+		// host loaded from the generated cfg has no way to advance past
+		// PENDING (state=4, has_been_checked=0) until something actively
+		// checks it — and nothing ever does.
+		if existing.Dynamic && !existing.HasBeenChecked && existing.ActiveChecksEnabled == false {
+			now := time.Now()
+			existing.CurrentState = objects.HostUp
+			existing.StateType = objects.StateTypeHard
+			existing.HasBeenChecked = true
+			existing.LastCheck = now
+			existing.LastStateChange = now
+			if existing.PluginOutput == "" {
+				existing.PluginOutput = "Host UP - registered via NRDP"
+			}
+		}
 		d.mu.Lock()
 		_, existed := d.records[hostname]
 		d.records[hostname] = time.Now()
@@ -99,6 +115,7 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		return
 	}
 
+	now := time.Now()
 	host := &objects.Host{
 		Name:                 hostname,
 		DisplayName:          hostname,
@@ -114,10 +131,20 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		NotificationInterval: 120,
 		ContactGroups:        d.defaultContactGroups(),
 		Dynamic:              true,
-		LastSeen:             time.Now(),
+		LastSeen:             now,
 		ShouldBeScheduled:    false,
-		CurrentState:         4, // pending
-		StateType:            objects.StateTypeHard,
+		// A passive-only NRDP host can never advance from PENDING on its own —
+		// nothing actively checks it. Since the submitter that registered us
+		// could only have run because the host is alive, mark the host UP at
+		// registration. If the user later wires an active host check (via
+		// nrdp_dynamic_host_check_command) it will overwrite this on the
+		// first poll.
+		CurrentState:    objects.HostUp,
+		StateType:       objects.StateTypeHard,
+		HasBeenChecked:  true,
+		LastCheck:       now,
+		LastStateChange: now,
+		PluginOutput:    "Host UP - registered via NRDP",
 	}
 
 	// If a host check command is configured and exists in the store,
