@@ -28,19 +28,24 @@ var ErrCheckTimeout = errors.New("check timed out")
 // the sentinel line carries the subshell's exit status and the worker loops
 // to the next command.
 //
-// Each check runs through gogios-runcheck, a tiny shim that places the
-// command inside a fresh PID namespace. When SIGKILL hits the subshell's
-// pgroup on timeout, the shim dies, and the kernel atomically tears down
-// the namespace — every plugin descendant (e.g. fping under check_fping)
-// dies and is reaped inside the namespace. No reparenting to PID 1, no
-// orphan zombies. If the shim is missing we fall back to plain `eval`.
+// Each check runs inside a fresh PID namespace via util-linux `unshare`.
+// When SIGKILL hits the subshell's pgroup on timeout, unshare (and the
+// shell it forked inside the namespace) die, and the kernel atomically
+// tears down the namespace — every plugin descendant (fping under
+// check_fping, etc.) dies and is reaped inside the namespace. No
+// reparenting to PID 1, no orphan zombies.
+//
+// We use the C `unshare` binary rather than rolling our own Go shim
+// because forking from a Go process is expensive (large mm → page-table
+// copy contends on mmap_lock under load); unshare is ~85 KB and forks
+// near-instantly. If unshare isn't installed we fall back to plain eval.
 //
 // bash (not /bin/sh) is required because dash refuses to enable job control
 // without a controlling terminal.
 const shellScript = `set -m
 s="$1"
-if [ -x /usr/local/bin/gogios-runcheck ]; then
-  spawn() { ( exec /usr/local/bin/gogios-runcheck "$1" ) </dev/null 2>&1 3>&- & }
+if [ -x /usr/bin/unshare ]; then
+  spawn() { ( exec /usr/bin/unshare --pid --fork /bin/sh -c "$1" ) </dev/null 2>&1 3>&- & }
 else
   spawn() { ( eval "$1" ) </dev/null 2>&1 3>&- & }
 fi
