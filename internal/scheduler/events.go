@@ -145,5 +145,21 @@ func RecurringEvents(now time.Time, reaperInterval, orphanInterval, sfreshnessIn
 		})
 	}
 
+	// Periodic downtime expiry sweep. Catches downtimes whose end-time
+	// passed while the in-process goroutine timer (set up in cmd/gogios's
+	// SCHEDULE_*_DOWNTIME handler) was killed by a restart. Without this
+	// sweep scheduled_downtime_depth never gets decremented and the
+	// service stays "in downtime" forever (KANB-109).
+	events = append(events, &Event{
+		Type:      EventExpireDowntime,
+		RunTime:   now.Add(downtimeExpireInterval),
+		Recurring: true,
+		Interval:  downtimeExpireInterval,
+	})
+
 	return events
 }
+
+// downtimeExpireInterval controls how often the scheduler sweeps for
+// expired downtimes. Matches Nagios 4.x's default of 60s.
+const downtimeExpireInterval = 60 * time.Second

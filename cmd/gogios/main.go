@@ -493,6 +493,16 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 			} else {
 				nagLogger.Log("Successfully read retention data from %s", mainCfg.StateRetentionFile)
 			}
+			// Sweep downtimes whose end-time passed while we were stopped.
+			// HandleEnd goroutine timers don't survive restart (KANB-109), so
+			// retention.dat can carry both in-effect downtimes with expired
+			// EndTimes AND phantom scheduled_downtime_depth on hosts/services
+			// whose triggering downtime is already gone. Run CheckExpired
+			// first to drop the expired downtimes (which decrements depth via
+			// HandleEnd), then reconcile any depths that don't match the
+			// remaining in-effect downtimes.
+			downtimeMgr.CheckExpired()
+			downtimeMgr.ReconcileDepths()
 		}
 	}
 
@@ -669,6 +679,15 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		if err := nagLogger.Rotate(); err != nil {
 			log.Printf("Error rotating log: %v", err)
 		}
+	}
+
+	// Periodic downtime expiry sweep. This is the durable mechanism that
+	// decrements scheduled_downtime_depth when a downtime's EndTime passes.
+	// The goroutine timer in SCHEDULE_*_DOWNTIME handles the common case
+	// for downtimes whose end fires while gogios is running; this sweep is
+	// the backstop for restarts (KANB-109).
+	sched.OnExpireDowntime = func() {
+		downtimeMgr.CheckExpired()
 	}
 
 	// Schedule the initial log rotation event if time-based rotation is enabled.

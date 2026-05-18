@@ -378,26 +378,44 @@ func (dm *DowntimeManager) CheckPendingFlexServiceDowntime(hostName, svcDesc str
 	}
 }
 
-// CheckExpired removes expired downtimes that never triggered.
+// CheckExpired removes expired downtimes — both ones that never started (e.g.
+// pending flex downtimes whose window passed) and active downtimes whose
+// EndTime has elapsed. For active downtimes this routes through HandleEnd so
+// scheduled_downtime_depth is decremented exactly once. This sweep is the
+// durable backstop for the goroutine-timer in cmd/gogios's SCHEDULE_*_DOWNTIME
+// handlers, which is lost on process restart.
 func (dm *DowntimeManager) CheckExpired() {
 	now := time.Now()
 	dm.mu.RLock()
-	var expired []uint64
+	var expiredPending, expiredActive []uint64
 	for id, d := range dm.downtimes {
-		if !d.IsInEffect && !d.EndTime.IsZero() && d.EndTime.Before(now) {
-			expired = append(expired, id)
+		if d.EndTime.IsZero() || !d.EndTime.Before(now) {
+			continue
+		}
+		if d.IsInEffect {
+			expiredActive = append(expiredActive, id)
+		} else {
+			expiredPending = append(expiredPending, id)
 		}
 	}
 	dm.mu.RUnlock()
 
-	for _, id := range expired {
+	// Active downtimes past their EndTime: route through HandleEnd to
+	// decrement scheduled_downtime_depth, fire notifications, and drop them.
+	for _, id := range expiredActive {
+		dm.HandleEnd(id)
+	}
+
+	// Pending downtimes that never triggered: send end-notification (matches
+	// Nagios 4.x behaviour for expired flex downtimes), drop the comment, and
+	// remove from the map. Depth was never incremented, so no decrement needed.
+	for _, id := range expiredPending {
 		dm.mu.RLock()
 		d := dm.downtimes[id]
 		dm.mu.RUnlock()
 		if d == nil {
 			continue
 		}
-		// Send end notification for expired flex downtimes
 		if dm.notifier != nil {
 			if d.Type == objects.HostDowntimeType {
 				dm.notifier.SendHostNotification(d.HostName, objects.NotificationDowntimeEnd, d.Author, d.Comment, 0)
@@ -414,6 +432,54 @@ func (dm *DowntimeManager) CheckExpired() {
 		dm.mu.Lock()
 		delete(dm.downtimes, id)
 		dm.mu.Unlock()
+	}
+}
+
+// ReconcileDepths recomputes scheduled_downtime_depth for every host and
+// service from the current set of in-effect downtimes. Call once after
+// retention load to clear "phantom" depths from any downtime whose end
+// fired while the process was down (the goroutine HandleEnd timer is lost
+// across restarts, so retention.dat carries a depth that no longer matches
+// any active downtime). This is the cure for KANB-109.
+func (dm *DowntimeManager) ReconcileDepths() {
+	dm.mu.RLock()
+	hostDepths := make(map[string]int)
+	type svcKey struct {
+		host string
+		desc string
+	}
+	svcDepths := make(map[svcKey]int)
+	for _, d := range dm.downtimes {
+		if !d.IsInEffect {
+			continue
+		}
+		if d.Type == objects.HostDowntimeType {
+			hostDepths[d.HostName]++
+		} else {
+			svcDepths[svcKey{d.HostName, d.ServiceDescription}]++
+		}
+	}
+	dm.mu.RUnlock()
+
+	// Zero every host/service first, then apply the true counts. This wipes
+	// stale depths on entries that have zero in-effect downtimes.
+	for _, h := range dm.store.Hosts {
+		want := hostDepths[h.Name]
+		if h.ScheduledDowntimeDepth != want {
+			dm.log("DOWNTIME RECONCILE: host=%s depth %d -> %d", h.Name, h.ScheduledDowntimeDepth, want)
+			h.ScheduledDowntimeDepth = want
+		}
+	}
+	for _, s := range dm.store.Services {
+		hostName := ""
+		if s.Host != nil {
+			hostName = s.Host.Name
+		}
+		want := svcDepths[svcKey{hostName, s.Description}]
+		if s.ScheduledDowntimeDepth != want {
+			dm.log("DOWNTIME RECONCILE: host=%s svc=%s depth %d -> %d", hostName, s.Description, s.ScheduledDowntimeDepth, want)
+			s.ScheduledDowntimeDepth = want
+		}
 	}
 }
 

@@ -273,10 +273,10 @@ func TestCheckOrphans_DisabledServiceNotReQueued(t *testing.T) {
 func TestRecurringEvents(t *testing.T) {
 	now := time.Now()
 	events := RecurringEvents(now, 10, 60, 60, 60, 60, 60, 30, true, true, false)
-	// Should have: reaper, orphan, sfreshness, hfreshness, status, retention
-	// NOT auto_reschedule (disabled)
-	if len(events) != 6 {
-		t.Errorf("expected 6 recurring events, got %d", len(events))
+	// Should have: reaper, orphan, sfreshness, hfreshness, status, retention,
+	// expire_downtime. NOT auto_reschedule (disabled).
+	if len(events) != 7 {
+		t.Errorf("expected 7 recurring events, got %d", len(events))
 	}
 	for _, e := range events {
 		if !e.Recurring {

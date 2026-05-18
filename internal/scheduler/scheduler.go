@@ -25,6 +25,7 @@ type Scheduler struct {
 	OnStatusSave      func()
 	OnRetentionSave   func()
 	OnLogRotation     func()
+	OnExpireDowntime  func()
 	OnProcessResult   func(cr *objects.CheckResult)
 	OnProcessResults  func(results []*objects.CheckResult) // batch version — preferred over OnProcessResult
 
@@ -363,6 +364,11 @@ func (s *Scheduler) handleEvent(e *Event, now time.Time) {
 
 	case EventOrphanCheck:
 		s.checkOrphans(now)
+
+	case EventExpireDowntime:
+		if s.OnExpireDowntime != nil {
+			s.OnExpireDowntime()
+		}
 
 	case EventCheckReaper:
 		// In Go, results come via channel, so this is mostly a no-op.
