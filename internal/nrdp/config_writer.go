@@ -110,11 +110,14 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 			fmt.Fprintf(&buf, "    check_command           %s\n", d.hostCheckCmd)
 			fmt.Fprintf(&buf, "    active_checks_enabled   1\n")
 		} else {
-			// check_command is required by nagios's parser even for
-			// passive-only hosts. check_dummy never runs at active_checks=0
-			// but keeps the field non-empty.
+			// No real check command configured — run check_dummy on the
+			// normal interval so last_check stays fresh and the host shows
+			// as UP. We can't use fping for many NRDP hosts (fn2-prod-*,
+			// fn2ai-*) because their hostnames don't resolve, and dropping
+			// active checks entirely leaves last_check pinned at registration
+			// time (looks broken in the UI).
 			fmt.Fprintf(&buf, "    check_command           check_dummy!0!OK\n")
-			fmt.Fprintf(&buf, "    active_checks_enabled   0\n")
+			fmt.Fprintf(&buf, "    active_checks_enabled   1\n")
 		}
 		fmt.Fprintf(&buf, "    passive_checks_enabled  1\n")
 		fmt.Fprintf(&buf, "    notifications_enabled   1\n")

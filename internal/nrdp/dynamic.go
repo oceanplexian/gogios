@@ -86,20 +86,31 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 				existing.ContactGroups = append(existing.ContactGroups, cg)
 			}
 		}
-		// Unstick PENDING dynamic hosts. A host whose submitter is currently
-		// reaching us is alive by definition; without this nudge a passive-only
-		// host loaded from the generated cfg has no way to advance past
-		// PENDING (state=4, has_been_checked=0) until something actively
-		// checks it — and nothing ever does.
-		if existing.Dynamic && !existing.HasBeenChecked && existing.ActiveChecksEnabled == false {
+		// Heal pre-existing dynamic hosts that loaded from the generated cfg
+		// before the active-checks-by-default change. Make them active +
+		// scheduled with check_dummy if they have no check command, and clear
+		// any stale PENDING state.
+		if existing.Dynamic {
 			now := time.Now()
-			existing.CurrentState = objects.HostUp
-			existing.StateType = objects.StateTypeHard
-			existing.HasBeenChecked = true
-			existing.LastCheck = now
-			existing.LastStateChange = now
-			if existing.PluginOutput == "" {
-				existing.PluginOutput = "Host UP - registered via NRDP"
+			if !existing.ActiveChecksEnabled {
+				existing.ActiveChecksEnabled = true
+				existing.ShouldBeScheduled = true
+			}
+			if existing.CheckCommand == nil {
+				if cmd := d.store.GetCommand("check_dummy"); cmd != nil {
+					existing.CheckCommand = cmd
+					existing.CheckCommandArgs = "0!OK"
+				}
+			}
+			if !existing.HasBeenChecked {
+				existing.CurrentState = objects.HostUp
+				existing.StateType = objects.StateTypeHard
+				existing.HasBeenChecked = true
+				existing.LastCheck = now
+				existing.LastStateChange = now
+				if existing.PluginOutput == "" {
+					existing.PluginOutput = "Host UP - registered via NRDP"
+				}
 			}
 		}
 		d.mu.Lock()
@@ -125,20 +136,18 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		CheckInterval:        5,
 		RetryInterval:        1,
 		PassiveChecksEnabled: true,
-		ActiveChecksEnabled:  false,
+		ActiveChecksEnabled:  true,
 		NotificationsEnabled: true,
 		NotificationOptions:  objects.OptDown | objects.OptUnreachable | objects.OptRecovery,
 		NotificationInterval: 120,
 		ContactGroups:        d.defaultContactGroups(),
 		Dynamic:              true,
 		LastSeen:             now,
-		ShouldBeScheduled:    false,
-		// A passive-only NRDP host can never advance from PENDING on its own —
-		// nothing actively checks it. Since the submitter that registered us
-		// could only have run because the host is alive, mark the host UP at
-		// registration. If the user later wires an active host check (via
-		// nrdp_dynamic_host_check_command) it will overwrite this on the
-		// first poll.
+		ShouldBeScheduled:    true,
+		// A submitter actively reaching us implies the host is alive. Mark UP
+		// at registration so the host doesn't sit at PENDING for the first
+		// check interval. Active checks default to check_dummy below (cheap
+		// no-op that always returns OK) so last_check stays fresh.
 		CurrentState:    objects.HostUp,
 		StateType:       objects.StateTypeHard,
 		HasBeenChecked:  true,
@@ -147,13 +156,19 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		PluginOutput:    "Host UP - registered via NRDP",
 	}
 
-	// If a host check command is configured and exists in the store,
-	// enable active checks so the host gets pinged on schedule.
+	// Prefer an explicitly configured host check command (e.g., fping) if
+	// the user wired one up via nrdp_dynamic_host_check_command. Otherwise
+	// fall back to check_dummy!0!OK — a no-op that always returns OK and
+	// keeps last_check current without flapping on no-DNS hosts.
 	if d.hostCheckCmd != "" {
 		if cmd := d.store.GetCommand(d.hostCheckCmd); cmd != nil {
 			host.CheckCommand = cmd
-			host.ActiveChecksEnabled = true
-			host.ShouldBeScheduled = true
+		}
+	}
+	if host.CheckCommand == nil {
+		if cmd := d.store.GetCommand("check_dummy"); cmd != nil {
+			host.CheckCommand = cmd
+			host.CheckCommandArgs = "0!OK"
 		}
 	}
 
