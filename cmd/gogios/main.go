@@ -807,6 +807,15 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		nrdpServer = nrdp.New(nrdpCfg, store, resultCh, nagLogger)
 		nrdpTracker = nrdpServer.Tracker() // wire into OnProcessResults closure
 
+		// Persist NRDP-discovered hosts/services to a generated .cfg so they
+		// survive gogios restarts (KANB-110). retention.dat only attaches
+		// state to objects that already exist in the store at load time —
+		// without this file every dynamic host/service vanishes for ~15m
+		// after every pod restart until passive results trickle back in.
+		if nrdpTracker != nil && mainCfg.NRDPDynamicConfigFile != "" {
+			nrdpTracker.SetConfigPath(mainCfg.NRDPDynamicConfigFile)
+		}
+
 		// Configure dynamic host check command and scheduling callback.
 		if nrdpTracker != nil && mainCfg.NRDPDynamicHostCheckCommand != "" {
 			nrdpTracker.SetHostCheckCommand(mainCfg.NRDPDynamicHostCheckCommand)

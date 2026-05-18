@@ -22,6 +22,11 @@ type DynamicTracker struct {
 	// Host check configuration for dynamic hosts.
 	hostCheckCmd string // command name, e.g. "check-host-alive"; empty = passive only
 
+	// cfgPath is the persistent .cfg file we regenerate atomically on every
+	// EnsureHost / EnsureService / Prune. Empty disables the writer entirely
+	// (matches pre-KANB-110 behavior for tests / minimal embeddings).
+	cfgPath string
+
 	// OnScheduleHost is called after a new dynamic host is created with
 	// active checks enabled, so the scheduler can enqueue a host check event.
 	OnScheduleHost func(host *objects.Host)
@@ -52,6 +57,16 @@ func (d *DynamicTracker) SetHostCheckCommand(name string) {
 	d.hostCheckCmd = name
 }
 
+// SetConfigPath enables persistent .cfg writing for dynamic hosts/services.
+// On every EnsureHost / EnsureService / Prune call the tracker rewrites this
+// path with the full current set of dynamic objects, atomically (write tmp +
+// rename). On gogios restart nagios will load these definitions via cfg_dir
+// and retention.dat will attach state to them — closing KANB-110, the
+// 15-minute "monitoring hole" after every restart. Pass empty to disable.
+func (d *DynamicTracker) SetConfigPath(path string) {
+	d.cfgPath = path
+}
+
 // EnsureHost creates a minimal dynamic host if it does not already exist.
 // If a host check command is configured, the host gets active checks
 // enabled and is scheduled for checking.
@@ -72,7 +87,14 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 			}
 		}
 		d.mu.Lock()
+		_, existed := d.records[hostname]
 		d.records[hostname] = time.Now()
+		if !existed {
+			// First time we've seen this pre-existing static/dynamic host
+			// via NRDP — make sure it lands in the generated cfg so a future
+			// restart (after the static def is removed, say) doesn't lose it.
+			d.writeGeneratedConfigLocked()
+		}
 		d.mu.Unlock()
 		return
 	}
@@ -112,6 +134,7 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 
 	d.mu.Lock()
 	d.records[hostname] = time.Now()
+	d.writeGeneratedConfigLocked()
 	d.mu.Unlock()
 
 	// Notify the scheduler to enqueue a check event for this host.
@@ -143,7 +166,12 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 			}
 		}
 		d.mu.Lock()
-		d.records[hostname+"\t"+servicename] = time.Now()
+		key := hostname + "\t" + servicename
+		_, existed := d.records[key]
+		d.records[key] = time.Now()
+		if !existed {
+			d.writeGeneratedConfigLocked()
+		}
 		d.mu.Unlock()
 		return
 	}
@@ -171,6 +199,7 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 
 	d.mu.Lock()
 	d.records[hostname+"\t"+servicename] = time.Now()
+	d.writeGeneratedConfigLocked()
 	d.mu.Unlock()
 }
 
@@ -246,6 +275,9 @@ func (d *DynamicTracker) Prune() {
 
 	if prunedHosts > 0 || prunedServices > 0 {
 		d.logFunc("dynamic pruner: removed %d hosts, %d services", prunedHosts, prunedServices)
+		// Persist the new (smaller) set so a restart doesn't resurrect
+		// the just-pruned objects from the previous cfg snapshot.
+		d.writeGeneratedConfigLocked()
 	}
 }
 

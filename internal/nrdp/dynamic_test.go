@@ -1,6 +1,11 @@
 package nrdp
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -207,5 +212,158 @@ func TestPruneRemovesServicesWithHost(t *testing.T) {
 	}
 	if store.GetService("prunehost", "svc2") != nil {
 		t.Error("svc2 was not pruned")
+	}
+}
+
+// trackerWithCfg returns a tracker wired to a temp cfg file so the writer is
+// exercised end-to-end.
+func trackerWithCfg(t *testing.T) (*DynamicTracker, *objects.ObjectStore, string) {
+	t.Helper()
+	tr, store := newTracker(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nrdp_generated.cfg")
+	tr.SetConfigPath(path)
+	return tr, store, path
+}
+
+func readCfg(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(b)
+}
+
+func TestGeneratedCfgContainsEnsuredHost(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	tracker.EnsureHost("foo")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	if !strings.Contains(cfg, "define host {") {
+		t.Fatalf("cfg missing `define host {`:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "host_name               foo") {
+		t.Fatalf("cfg missing host_name=foo:\n%s", cfg)
+	}
+}
+
+func TestGeneratedCfgContainsEnsuredService(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	tracker.EnsureService("foo", "bar")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	if !strings.Contains(cfg, "define service {") {
+		t.Fatalf("cfg missing `define service {`:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "host_name               foo") {
+		t.Fatalf("cfg missing host_name=foo:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "service_description     bar") {
+		t.Fatalf("cfg missing service_description=bar:\n%s", cfg)
+	}
+}
+
+func TestGeneratedCfgPruneRemovesExpiredEntries(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	tracker.EnsureService("keepme", "ok")
+	tracker.EnsureService("goneby", "stale")
+	store.Mu.Unlock()
+
+	// Force the stale records past TTL.
+	tracker.mu.Lock()
+	past := time.Now().Add(-1 * time.Hour)
+	tracker.records["goneby"] = past
+	tracker.records["goneby\tstale"] = past
+	tracker.mu.Unlock()
+
+	tracker.Prune()
+
+	cfg := readCfg(t, path)
+	if !strings.Contains(cfg, "host_name               keepme") {
+		t.Errorf("cfg should still contain keepme:\n%s", cfg)
+	}
+	if strings.Contains(cfg, "goneby") {
+		t.Errorf("cfg still references pruned host goneby:\n%s", cfg)
+	}
+	if strings.Contains(cfg, "stale") {
+		t.Errorf("cfg still references pruned service stale:\n%s", cfg)
+	}
+}
+
+func TestGeneratedCfgAtomicWriteNoStaleTmp(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	tracker.EnsureHost("foo")
+	store.Mu.Unlock()
+
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf(".tmp file leaked: stat err=%v", err)
+	}
+}
+
+func TestGeneratedCfgConcurrentEnsureHost(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	const N = 50
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			name := fmt.Sprintf("racy-%03d", idx)
+			store.Mu.Lock()
+			tracker.EnsureHost(name)
+			store.Mu.Unlock()
+		}(i)
+	}
+	wg.Wait()
+
+	cfg := readCfg(t, path)
+	for i := 0; i < N; i++ {
+		want := fmt.Sprintf("host_name               racy-%03d", i)
+		if !strings.Contains(cfg, want) {
+			t.Errorf("cfg missing host racy-%03d after concurrent EnsureHost", i)
+		}
+	}
+}
+
+func TestGeneratedCfgDisabledWhenNoPath(t *testing.T) {
+	tracker, store := newTracker(t)
+	// SetConfigPath NOT called — the writer must be a no-op.
+
+	store.Mu.Lock()
+	tracker.EnsureHost("foo")
+	store.Mu.Unlock()
+	// Nothing to assert beyond "didn't panic / didn't write somewhere weird".
+	// If a future regression makes us attempt a write with empty path, os.Rename
+	// of an empty source would error and we'd see it in logFunc — which is a
+	// silent no-op in tests. So just exercise the path.
+}
+
+func TestGeneratedCfgIncludesContactGroupsWhenPresent(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	// Pre-seed the contact groups that defaultContactGroups looks for so the
+	// generated cfg uses the same names. Otherwise contactGroupsCSV falls back
+	// to "bridge-admins" alone.
+	store.Mu.Lock()
+	_ = store.AddContactGroup(&objects.ContactGroup{Name: "admins"})
+	_ = store.AddContactGroup(&objects.ContactGroup{Name: "bridge-admins"})
+	tracker.EnsureService("h1", "s1")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	if !strings.Contains(cfg, "contact_groups          admins,bridge-admins") {
+		t.Fatalf("cfg missing expected contact_groups line:\n%s", cfg)
 	}
 }

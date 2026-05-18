@@ -180,6 +180,7 @@ type MainConfig struct {
 	NRDPDynamicTTL              int    // seconds before stale dynamic objects are pruned (default 86400)
 	NRDPDynamicPrune            int    // seconds between prune runs (default 600)
 	NRDPDynamicHostCheckCommand string // check command for dynamic hosts (default "check-host-alive", empty=passive only)
+	NRDPDynamicConfigFile       string // persistent .cfg file with all dynamic hosts/services; empty=disabled (default /opt/nagios/etc/dynamic/nrdp_generated.cfg)
 	NRDPSSLCert        string // TLS certificate file
 	NRDPSSLKey         string // TLS key file
 
@@ -252,6 +253,7 @@ func NewMainConfig() *MainConfig {
 		NRDPDynamicTTL:              86400,
 		NRDPDynamicPrune:            600,
 		NRDPDynamicHostCheckCommand: "", // empty = passive only; avoids fping storms for NRDP-registered hosts
+		NRDPDynamicConfigFile:       "/opt/nagios/etc/dynamic/nrdp_generated.cfg",
 	}
 }
 
@@ -365,6 +367,8 @@ func (c *MainConfig) setDirective(key, val string) error {
 		return setInt(&c.NRDPDynamicPrune, val)
 	case "nrdp_dynamic_host_check_command":
 		c.NRDPDynamicHostCheckCommand = val
+	case "nrdp_dynamic_config_file":
+		c.NRDPDynamicConfigFile = c.resolvePath(val)
 	case "nrdp_ssl_cert":
 		c.NRDPSSLCert = c.resolvePath(val)
 	case "nrdp_ssl_key":
