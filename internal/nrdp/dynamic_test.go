@@ -350,6 +350,66 @@ func TestGeneratedCfgDisabledWhenNoPath(t *testing.T) {
 	// silent no-op in tests. So just exercise the path.
 }
 
+func TestGeneratedCfgSkipsStaticHosts(t *testing.T) {
+	// Regression test for the duplicate-host startup crash seen during
+	// initial KANB-110 deploy. Static hosts get tracked in d.records when
+	// NRDP starts pushing results for them (e.g. host "central" is defined
+	// in hosts.cfg AND receives NRDP submissions). The generated cfg must
+	// omit them; emitting `define host { host_name=central }` while the
+	// static def also exists makes nagios refuse to load the whole config
+	// ("duplicate host: central").
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	// Pre-seed a static host the way config loading would.
+	_ = store.AddHost(&objects.Host{
+		Name:    "static-box",
+		Alias:   "static-box",
+		Dynamic: false,
+	})
+	// EnsureHost on a pre-existing static host should record the touch
+	// (so TTL tracking works) but the writer must skip emitting the host
+	// stanza.
+	tracker.EnsureHost("static-box")
+	tracker.EnsureHost("real-dyn")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	if strings.Contains(cfg, "host_name               static-box") {
+		t.Errorf("cfg must not redefine static host:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, "host_name               real-dyn") {
+		t.Errorf("cfg missing dynamic host real-dyn:\n%s", cfg)
+	}
+}
+
+func TestGeneratedCfgEmitsDynamicSvcOnStaticHost(t *testing.T) {
+	// A dynamic service on a static host is a real configuration: e.g.
+	// central is statically defined, but NRDP discovers "Anycast DNS"
+	// passively on it. The service must be emitted, but the host stanza
+	// must NOT be (it'd duplicate the static def).
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	_ = store.AddHost(&objects.Host{
+		Name:    "central",
+		Alias:   "central",
+		Dynamic: false,
+	})
+	tracker.EnsureService("central", "Anycast DNS")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	// Host stanza must be omitted.
+	if strings.Contains(cfg, "host_name               central\n    alias                   central") {
+		t.Errorf("cfg should not redefine static host 'central':\n%s", cfg)
+	}
+	// Service stanza must be present.
+	if !strings.Contains(cfg, "service_description     Anycast DNS") {
+		t.Errorf("cfg missing dynamic service on static host:\n%s", cfg)
+	}
+}
+
 func TestGeneratedCfgIncludesContactGroupsWhenPresent(t *testing.T) {
 	tracker, store, path := trackerWithCfg(t)
 

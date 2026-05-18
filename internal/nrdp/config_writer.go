@@ -34,25 +34,50 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 	}
 
 	// Build sorted list of (host, service) keys for deterministic output.
+	// Skip anything that already exists as a STATIC definition — emitting a
+	// duplicate `define host { host_name=X }` makes nagios refuse to load
+	// the whole config on startup ("duplicate host: X"), so we'd brick the
+	// daemon. Static-vs-dynamic is determined by the store's Dynamic flag
+	// (EnsureHost sets it true for objects it creates; objects loaded from
+	// .cfg keep the zero value of false).
+	//
+	// IMPORTANT: callers (EnsureHost / EnsureService / Prune) hold
+	// d.store.Mu (write lock) — do NOT acquire it here, that would deadlock.
 	hosts := make([]string, 0)
 	hostSet := make(map[string]struct{})
 	type svcKey struct{ host, desc string }
 	services := make([]svcKey, 0)
+
 	for key := range d.records {
 		if i := strings.Index(key, "\t"); i >= 0 {
 			h, s := key[:i], key[i+1:]
+			// Skip when this service is a static def. A static host can
+			// legitimately host a dynamic service, so check the service
+			// independently — not just the host.
+			if ss := d.store.GetService(h, s); ss != nil && !ss.Dynamic {
+				continue
+			}
 			services = append(services, svcKey{h, s})
 			if _, ok := hostSet[h]; !ok {
 				hostSet[h] = struct{}{}
-				hosts = append(hosts, h)
+				// Only emit the host stanza if it's dynamic (or doesn't
+				// exist yet). For a dynamic service on a static host, we
+				// need the service def but NOT the host def.
+				if hh := d.store.GetHost(h); hh == nil || hh.Dynamic {
+					hosts = append(hosts, h)
+				}
 			}
 		} else {
+			if hh := d.store.GetHost(key); hh != nil && !hh.Dynamic {
+				continue
+			}
 			if _, ok := hostSet[key]; !ok {
 				hostSet[key] = struct{}{}
 				hosts = append(hosts, key)
 			}
 		}
 	}
+
 	sort.Strings(hosts)
 	sort.Slice(services, func(i, j int) bool {
 		if services[i].host != services[j].host {
