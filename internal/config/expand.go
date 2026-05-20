@@ -2,15 +2,30 @@ package config
 
 import (
 	"fmt"
+	"log"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/oceanplexian/gogios/internal/objects"
 )
 
+// fromGeneratedCfg reports whether obj was parsed from the NRDP-generated
+// dynamic cfg (the file the DynamicTracker rewrites). That file is a derived,
+// regenerable artifact — objects loaded from it are owned by the tracker, and
+// an orphaned service in it is a recoverable condition rather than a fatal
+// user-config error. genCfgFile == "" disables the special-casing.
+func fromGeneratedCfg(obj *TemplateObject, genCfgFile string) bool {
+	return genCfgFile != "" && filepath.Clean(obj.File) == filepath.Clean(genCfgFile)
+}
+
 // ExpandAndRegister runs the full Nagios config pipeline: group resolution,
 // service duplication, inter-object inheritance, and registration into the store.
-func ExpandAndRegister(parser *ObjectParser, store *objects.ObjectStore) error {
+// genCfgFile is the path of the NRDP-generated dynamic cfg (may be empty); hosts
+// and services loaded from it are flagged Dynamic so the tracker re-persists them
+// instead of letting them erode across restarts, and an orphaned service in it is
+// skipped rather than aborting the whole load.
+func ExpandAndRegister(parser *ObjectParser, store *objects.ObjectStore, genCfgFile string) error {
 	// Step 1: Register commands first (needed by everything else)
 	if err := registerCommands(parser, store); err != nil {
 		return err
@@ -28,7 +43,7 @@ func ExpandAndRegister(parser *ObjectParser, store *objects.ObjectStore) error {
 		return err
 	}
 	// Step 5: Register hosts
-	if err := registerHosts(parser, store); err != nil {
+	if err := registerHosts(parser, store, genCfgFile); err != nil {
 		return err
 	}
 	// Step 6: Register host groups (recombobulate)
@@ -36,7 +51,7 @@ func ExpandAndRegister(parser *ObjectParser, store *objects.ObjectStore) error {
 		return err
 	}
 	// Step 7: Register services (with duplication for multi-host and hostgroup)
-	if err := registerServices(parser, store); err != nil {
+	if err := registerServices(parser, store, genCfgFile); err != nil {
 		return err
 	}
 	// Step 8: Register service groups (recombobulate)
@@ -274,7 +289,7 @@ func registerContactGroups(parser *ObjectParser, store *objects.ObjectStore) err
 	return nil
 }
 
-func registerHosts(parser *ObjectParser, store *objects.ObjectStore) error {
+func registerHosts(parser *ObjectParser, store *objects.ObjectStore, genCfgFile string) error {
 	for _, obj := range parser.Objects {
 		if obj.Type != "host" || !obj.Register() {
 			continue
@@ -365,6 +380,15 @@ func registerHosts(parser *ObjectParser, store *objects.ObjectStore) error {
 		h.ContactGroups = resolveContactGroups(store, attrOr(obj, "contact_groups", ""))
 		h.Contacts = resolveContacts(store, attrOr(obj, "contacts", ""))
 
+		// Hosts loaded from the NRDP-generated cfg are owned by the
+		// DynamicTracker. Flag them Dynamic so the tracker re-persists them on
+		// the next registration/prune instead of treating them as static and
+		// dropping their host stanza — the bug that eroded the generated cfg
+		// across restarts and left services orphaned (KANB-110).
+		if fromGeneratedCfg(obj, genCfgFile) {
+			h.Dynamic = true
+		}
+
 		if err := store.AddHost(h); err != nil {
 			return fmt.Errorf("%s:%d: %w", obj.File, obj.Line, err)
 		}
@@ -444,7 +468,7 @@ func registerHostGroups(parser *ObjectParser, store *objects.ObjectStore) error 
 	return nil
 }
 
-func registerServices(parser *ObjectParser, store *objects.ObjectStore) error {
+func registerServices(parser *ObjectParser, store *objects.ObjectStore, genCfgFile string) error {
 	for _, obj := range parser.Objects {
 		if obj.Type != "service" || !obj.Register() {
 			continue
@@ -477,6 +501,15 @@ func registerServices(parser *ObjectParser, store *objects.ObjectStore) error {
 		for _, hName := range hostNames {
 			h := store.GetHost(hName)
 			if h == nil {
+				// An orphaned service in the NRDP-generated cfg (host stanza
+				// dropped by the erosion bug, host pruned, etc.) is a recoverable
+				// condition in a regenerable file — skip it and let the tracker
+				// rewrite a clean cfg, rather than bricking the whole daemon on
+				// startup. Static user configs stay strict (fatal).
+				if fromGeneratedCfg(obj, genCfgFile) {
+					log.Printf("config: dropping orphaned dynamic service %q on missing host %q (%s:%d); generated cfg will be regenerated", desc, hName, obj.File, obj.Line)
+					continue
+				}
 				return fmt.Errorf("%s:%d: host '%s' not found for service '%s'", obj.File, obj.Line, hName, desc)
 			}
 			svc := &objects.Service{
@@ -540,6 +573,12 @@ func registerServices(parser *ObjectParser, store *objects.ObjectStore) error {
 			}
 			svc.ContactGroups = resolveContactGroups(store, attrOr(obj, "contact_groups", ""))
 			svc.Contacts = resolveContacts(store, attrOr(obj, "contacts", ""))
+
+			// Services from the NRDP-generated cfg are tracker-owned; flag them
+			// Dynamic so they're re-persisted rather than eroded across restarts.
+			if fromGeneratedCfg(obj, genCfgFile) {
+				svc.Dynamic = true
+			}
 
 			if err := store.AddService(svc); err != nil {
 				return fmt.Errorf("%s:%d: %w", obj.File, obj.Line, err)

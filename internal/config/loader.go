@@ -51,7 +51,7 @@ func LoadConfig(mainConfigPath string) (*LoadResult, error) {
 
 	// Step 5: Expand, register, and wire up all objects
 	store := objects.NewObjectStore()
-	if err := ExpandAndRegister(parser, store); err != nil {
+	if err := ExpandAndRegister(parser, store, mainCfg.NRDPDynamicConfigFile); err != nil {
 		return nil, fmt.Errorf("error expanding objects: %w", err)
 	}
 
