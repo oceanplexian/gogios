@@ -19,6 +19,50 @@ func fromGeneratedCfg(obj *TemplateObject, genCfgFile string) bool {
 	return genCfgFile != "" && filepath.Clean(obj.File) == filepath.Clean(genCfgFile)
 }
 
+// staticHostNames collects host_names defined OUTSIDE the generated cfg.
+//
+// The NRDP-generated cfg persists every discovered host so it survives a
+// restart (KANB-110). But some of those hosts are ALSO pinned statically in
+// hosts.cfg — e.g. fn2ai-east is given a fixed 10.99.0.2 address so fping
+// works, since its NRDP label isn't DNS-resolvable. Loading both definitions
+// is a fatal "duplicate host". The static definition is authoritative (it
+// carries the real address/template), so the generated duplicate must yield.
+// Returns the set of statically-defined host names for that skip decision.
+func staticHostNames(parser *ObjectParser, genCfgFile string) map[string]bool {
+	out := make(map[string]bool)
+	for _, obj := range parser.Objects {
+		if obj.Type != "host" || !obj.Register() || fromGeneratedCfg(obj, genCfgFile) {
+			continue
+		}
+		if n, ok := obj.Get("host_name"); ok && n != "" {
+			out[n] = true
+		}
+	}
+	return out
+}
+
+// staticServiceKeys collects "host\tdescription" keys for services defined
+// OUTSIDE the generated cfg, so a generated service that duplicates a static
+// one yields the same way hosts do.
+func staticServiceKeys(parser *ObjectParser, genCfgFile string) map[string]bool {
+	out := make(map[string]bool)
+	for _, obj := range parser.Objects {
+		if obj.Type != "service" || !obj.Register() || fromGeneratedCfg(obj, genCfgFile) {
+			continue
+		}
+		desc, _ := obj.Get("service_description")
+		if desc == "" {
+			continue
+		}
+		if v, ok := obj.Get("host_name"); ok {
+			for _, h := range splitCSV(v) {
+				out[h+"\t"+desc] = true
+			}
+		}
+	}
+	return out
+}
+
 // ExpandAndRegister runs the full Nagios config pipeline: group resolution,
 // service duplication, inter-object inheritance, and registration into the store.
 // genCfgFile is the path of the NRDP-generated dynamic cfg (may be empty); hosts
@@ -290,6 +334,7 @@ func registerContactGroups(parser *ObjectParser, store *objects.ObjectStore) err
 }
 
 func registerHosts(parser *ObjectParser, store *objects.ObjectStore, genCfgFile string) error {
+	staticHosts := staticHostNames(parser, genCfgFile)
 	for _, obj := range parser.Objects {
 		if obj.Type != "host" || !obj.Register() {
 			continue
@@ -297,6 +342,13 @@ func registerHosts(parser *ObjectParser, store *objects.ObjectStore, genCfgFile 
 		name, _ := obj.Get("host_name")
 		if name == "" {
 			return fmt.Errorf("%s:%d: host missing host_name", obj.File, obj.Line)
+		}
+		// A host pinned statically (e.g. hosts.cfg) and ALSO persisted in the
+		// generated cfg would be a fatal duplicate. The static def wins; drop
+		// the generated one. (Mirrors the orphaned-service handling below.)
+		if fromGeneratedCfg(obj, genCfgFile) && staticHosts[name] {
+			log.Printf("config: skipping generated host %q — already defined statically (%s:%d)", name, obj.File, obj.Line)
+			continue
 		}
 		h := &objects.Host{
 			Name:                       name,
@@ -469,6 +521,7 @@ func registerHostGroups(parser *ObjectParser, store *objects.ObjectStore) error 
 }
 
 func registerServices(parser *ObjectParser, store *objects.ObjectStore, genCfgFile string) error {
+	staticSvcs := staticServiceKeys(parser, genCfgFile)
 	for _, obj := range parser.Objects {
 		if obj.Type != "service" || !obj.Register() {
 			continue
@@ -499,6 +552,12 @@ func registerServices(parser *ObjectParser, store *objects.ObjectStore, genCfgFi
 
 		// Duplicate: create one service per host
 		for _, hName := range hostNames {
+			// A generated service that duplicates a statically-defined one
+			// yields to the static def (same rationale as hosts above).
+			if fromGeneratedCfg(obj, genCfgFile) && staticSvcs[hName+"\t"+desc] {
+				log.Printf("config: skipping generated service %q on %q — already defined statically (%s:%d)", desc, hName, obj.File, obj.Line)
+				continue
+			}
 			h := store.GetHost(hName)
 			if h == nil {
 				// An orphaned service in the NRDP-generated cfg (host stanza
