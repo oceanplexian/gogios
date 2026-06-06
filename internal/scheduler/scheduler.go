@@ -237,6 +237,22 @@ func (s *Scheduler) fireReadyEvents() {
 			s.drainResults()
 		}
 
+		// Drop a service/host check whose previous execution is still in
+		// flight. Launching a second concurrent check for the same entity is
+		// the root of runaway check storms: with no per-entity guard and an
+		// unlimited concurrency cap (max_concurrent_checks=0), a slow target
+		// (e.g. sshd MaxStartups throttling check_ssh) lets checks pile up
+		// unboundedly, and because each completed check's result schedules
+		// another "next" check, overlapping checks compound exponentially.
+		// The in-flight check's result (or checkOrphans on timeout) schedules
+		// the next check, so dropping this redundant event is safe. Mirrors
+		// Nagios's check_service_check_viability "already executing" guard.
+		if s.isExecutingNonForced(next) {
+			heap.Pop(&s.queue)
+			dispatched++
+			continue
+		}
+
 		// Check if event should run
 		if !s.shouldRunEvent(next) {
 			// Nudge the event forward
@@ -265,6 +281,30 @@ func (s *Scheduler) fireReadyEvents() {
 	if dispatched > drainInterval {
 		s.drainResults()
 	}
+}
+
+// isExecutingNonForced reports whether a non-forced service or host check
+// event targets an entity whose previous check is still in flight. The
+// scheduler uses this to drop redundant concurrent checks for the same entity
+// (the in-flight check's result reschedules the next one). Forced checks
+// (operator-initiated) bypass the guard, matching shouldRunEvent.
+func (s *Scheduler) isExecutingNonForced(e *Event) bool {
+	if e.CheckOptions&objects.CheckOptionForceExecution != 0 {
+		return false
+	}
+	switch e.Type {
+	case EventServiceCheck:
+		if svcMap := s.services[e.HostName]; svcMap != nil {
+			if svc := svcMap[e.ServiceDescription]; svc != nil {
+				return svc.IsExecuting
+			}
+		}
+	case EventHostCheck:
+		if host := s.hosts[e.HostName]; host != nil {
+			return host.IsExecuting
+		}
+	}
+	return false
 }
 
 // shouldRunEvent gates check events based on parallel limits and enabled flags.

@@ -270,6 +270,85 @@ func TestCheckOrphans_DisabledServiceNotReQueued(t *testing.T) {
 	}
 }
 
+// dueServiceCheck builds a scheduler with one service and a single due
+// service-check event for it, ready to drive through fireReadyEvents.
+func dueServiceCheckScheduler(t *testing.T, isExecuting bool, opts int) (*Scheduler, *objects.Service, *int) {
+	t.Helper()
+	cfg := objects.DefaultConfig()
+	cfg.ExecuteServiceChecks = true
+
+	host := &objects.Host{Name: "h1", ActiveChecksEnabled: true, ShouldBeScheduled: true}
+	svc := &objects.Service{
+		Host:                host,
+		Description:         "SSH",
+		CheckInterval:       5,
+		ActiveChecksEnabled: true,
+		ShouldBeScheduled:   true,
+		IsExecuting:         isExecuting,
+	}
+	s := New(cfg, []*objects.Host{host}, []*objects.Service{svc}, make(chan *objects.CheckResult, 1))
+	heap.Init(&s.queue)
+
+	runs := 0
+	s.OnRunServiceCheck = func(_ *objects.Service, _ int) { runs++ }
+
+	now := time.Now()
+	s.lastTimeChange = now // avoid the time-change compensation branch
+	heap.Push(&s.queue, &Event{
+		Type:               EventServiceCheck,
+		RunTime:            now.Add(-time.Millisecond),
+		HostName:           "h1",
+		ServiceDescription: "SSH",
+		CheckOptions:       opts,
+	})
+	return s, svc, &runs
+}
+
+// A service whose previous check is still in flight must NOT be dispatched
+// again, and the redundant event must be dropped (not nudged). This is the
+// guard that prevents runaway concurrent-check storms against slow targets.
+func TestFireReadyEvents_SkipsServiceAlreadyExecuting(t *testing.T) {
+	s, _, runs := dueServiceCheckScheduler(t, true /*isExecuting*/, 0)
+
+	s.fireReadyEvents()
+
+	if *runs != 0 {
+		t.Errorf("expected 0 dispatches for an already-executing service, got %d", *runs)
+	}
+	for _, e := range s.queue {
+		if e.Type == EventServiceCheck && e.ServiceDescription == "SSH" {
+			t.Errorf("redundant check event should be dropped while the service is executing, found one at %v", e.RunTime)
+		}
+	}
+}
+
+// The guard must not break normal operation: a service that is not executing
+// dispatches exactly once and is marked executing.
+func TestFireReadyEvents_RunsServiceNotExecuting(t *testing.T) {
+	s, svc, runs := dueServiceCheckScheduler(t, false /*isExecuting*/, 0)
+
+	s.fireReadyEvents()
+
+	if *runs != 1 {
+		t.Errorf("expected 1 dispatch for an idle service, got %d", *runs)
+	}
+	if !svc.IsExecuting {
+		t.Errorf("service should be marked IsExecuting after dispatch")
+	}
+}
+
+// A forced (operator-initiated) check bypasses the already-executing guard,
+// matching shouldRunEvent's forced short-circuit.
+func TestFireReadyEvents_ForcedRunsEvenIfExecuting(t *testing.T) {
+	s, _, runs := dueServiceCheckScheduler(t, true /*isExecuting*/, objects.CheckOptionForceExecution)
+
+	s.fireReadyEvents()
+
+	if *runs != 1 {
+		t.Errorf("expected forced check to dispatch even while executing, got %d", *runs)
+	}
+}
+
 func TestRecurringEvents(t *testing.T) {
 	now := time.Now()
 	events := RecurringEvents(now, 10, 60, 60, 60, 60, 60, 30, true, true, false)
