@@ -270,6 +270,61 @@ func TestGeneratedCfgContainsEnsuredService(t *testing.T) {
 	}
 }
 
+func TestEnsureServiceWiresSystemdFDDependency(t *testing.T) {
+	tracker, store := newTracker(t)
+
+	store.Mu.Lock()
+	tracker.EnsureService("node-01", "K8s Node Ready")
+	tracker.EnsureService("node-01", "Systemd FD Exhaustion")
+	tracker.EnsureService("node-01", "Systemd FD Exhaustion")
+	store.Mu.Unlock()
+
+	store.Mu.RLock()
+	defer store.Mu.RUnlock()
+
+	fd := store.GetService("node-01", "Systemd FD Exhaustion")
+	if fd == nil {
+		t.Fatal("Systemd FD Exhaustion service not created")
+	}
+	if len(fd.NotifyDeps) != 1 {
+		t.Fatalf("NotifyDeps len = %d, want 1", len(fd.NotifyDeps))
+	}
+	if len(fd.ExecDeps) != 1 {
+		t.Fatalf("ExecDeps len = %d, want 1", len(fd.ExecDeps))
+	}
+	dep := fd.NotifyDeps[0]
+	if dep.Service == nil || dep.Service.Description != "K8s Node Ready" {
+		t.Fatalf("dependency master = %#v, want K8s Node Ready", dep.Service)
+	}
+	if got := len(store.ServiceDependencies); got != 1 {
+		t.Fatalf("ServiceDependencies len = %d, want 1", got)
+	}
+}
+
+func TestGeneratedCfgContainsSystemdFDDependency(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	tracker.EnsureService("node-01", "K8s Node Ready")
+	tracker.EnsureService("node-01", "Systemd FD Exhaustion")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	for _, want := range []string{
+		"define servicedependency {",
+		"host_name                       node-01",
+		"service_description             K8s Node Ready",
+		"dependent_host_name             node-01",
+		"dependent_service_description   Systemd FD Exhaustion",
+		"execution_failure_criteria      w,u,c,p",
+		"notification_failure_criteria   w,u,c,p",
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Fatalf("cfg missing %q:\n%s", want, cfg)
+		}
+	}
+}
+
 func TestGeneratedCfgPruneRemovesExpiredEntries(t *testing.T) {
 	tracker, store, path := trackerWithCfg(t)
 

@@ -215,6 +215,7 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 				existing.ContactGroups = append(existing.ContactGroups, cg)
 			}
 		}
+		d.ensureDynamicServiceDependenciesForHost(hostname)
 		d.mu.Lock()
 		key := hostname + "\t" + servicename
 		_, existed := d.records[key]
@@ -246,6 +247,7 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 	}
 	d.store.AddService(svc)
 	host.Services = append(host.Services, svc)
+	d.ensureDynamicServiceDependenciesForHost(hostname)
 
 	d.mu.Lock()
 	d.records[hostname+"\t"+servicename] = time.Now()
