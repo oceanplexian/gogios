@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -28,12 +29,19 @@ var ErrCheckTimeout = errors.New("check timed out")
 // the sentinel line carries the subshell's exit status and the worker loops
 // to the next command.
 //
-// Each check runs inside a fresh PID namespace via util-linux `unshare`.
+// Most checks run inside a fresh PID namespace via util-linux `unshare`.
 // When SIGKILL hits the subshell's pgroup on timeout, unshare (and the
 // shell it forked inside the namespace) die, and the kernel atomically
-// tears down the namespace — every plugin descendant (fping under
-// check_fping, etc.) dies and is reaped inside the namespace. No
-// reparenting to PID 1, no orphan zombies.
+// tears down the namespace — every plugin descendant dies and is reaped
+// inside the namespace. No reparenting to PID 1, no orphan zombies.
+//
+// Raw ICMP tools are the exception. fping and ping derive the ICMP echo ID
+// from their PID. Giving every concurrent check an independent PID namespace
+// makes them reuse the same small PID and therefore the same echo ID on the
+// shared network namespace. Replies then leak between checks, so an
+// unreachable target can be reported UP. Those commands run in gogios's PID
+// namespace, where their PIDs are unique; job-control process groups still
+// provide the same timeout cleanup.
 //
 // We use the C `unshare` binary rather than rolling our own Go shim
 // because forking from a Go process is expensive (large mm → page-table
@@ -44,18 +52,48 @@ var ErrCheckTimeout = errors.New("check timed out")
 // without a controlling terminal.
 const shellScript = `set -m
 s="$1"
+spawn_shared_pid() { ( eval "$1" ) </dev/null 2>&1 3>&- & }
 if [ -x /usr/bin/unshare ]; then
-  spawn() { ( exec /usr/bin/unshare --pid --fork /bin/sh -c "$1" ) </dev/null 2>&1 3>&- & }
+  spawn_pidns() { ( exec /usr/bin/unshare --pid --fork /bin/sh -c "$1" ) </dev/null 2>&1 3>&- & }
 else
-  spawn() { ( eval "$1" ) </dev/null 2>&1 3>&- & }
+  spawn_pidns() { ( eval "$1" ) </dev/null 2>&1 3>&- & }
 fi
-while IFS= read -r c; do
-  spawn "$c"
+while IFS=$'\t' read -r mode c; do
+  if [ "$mode" = shared-pid ]; then
+    spawn_shared_pid "$c"
+  else
+    spawn_pidns "$c"
+  fi
   pid=$!
   printf '%d\n' "$pid" >&3
   wait "$pid" 2>/dev/null
   printf '%s %d\n' "$s" $?
 done`
+
+var rawICMPExecutables = map[string]struct{}{
+	"check_fping": {},
+	"check_icmp":  {},
+	"check_ping":  {},
+	"fping":       {},
+	"fping6":      {},
+	"ping":        {},
+	"ping6":       {},
+}
+
+// requiresSharedPIDNamespace reports whether command may launch a raw ICMP
+// utility whose wire identifier is derived from its PID. It deliberately
+// scans every shell word so wrappers such as timeout, sudo, and env are safe.
+// A false positive only gives up PID-namespace isolation for that check; its
+// process group still provides bounded timeout cleanup.
+func requiresSharedPIDNamespace(command string) bool {
+	for _, field := range strings.Fields(command) {
+		field = strings.Trim(field, "\\\"'();|&")
+		if _, ok := rawICMPExecutables[filepath.Base(field)]; ok {
+			return true
+		}
+	}
+	return false
+}
 
 // shellWorker manages a single persistent /bin/sh process that executes
 // commands via pipe. Each command runs in its own session/process group
@@ -130,8 +168,14 @@ func (sw *shellWorker) Run(command string, timeout time.Duration) (output string
 		return "", -1, fmt.Errorf("shell worker is dead")
 	}
 
-	// Send the command to the worker.
-	_, err = fmt.Fprintf(sw.stdin, "%s\n", command)
+	// Send the execution mode and command to the worker. Raw ICMP tools must
+	// share gogios's PID namespace so concurrent processes have unique PIDs
+	// and therefore unique ICMP echo identifiers.
+	mode := "pidns"
+	if requiresSharedPIDNamespace(command) {
+		mode = "shared-pid"
+	}
+	_, err = fmt.Fprintf(sw.stdin, "%s\t%s\n", mode, command)
 	if err != nil {
 		sw.alive = false
 		return "", -1, fmt.Errorf("write command: %w", err)

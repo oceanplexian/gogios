@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -139,6 +140,94 @@ func TestShellWorkerTimeoutKillsSubshellProcessGroup(t *testing.T) {
 	if _, statErr := os.Stat(marker); statErr == nil {
 		os.Remove(marker)
 		t.Fatal("grandchild survived timeout — process group kill failed")
+	}
+}
+
+func TestRequiresSharedPIDNamespace(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{name: "check_fping", command: "/usr/lib/nagios/plugins/check_fping -H 10.0.0.1", want: true},
+		{name: "wrapped ping", command: "/usr/bin/timeout 5 /usr/bin/ping -c 1 10.0.0.1", want: true},
+		{name: "check_icmp", command: "sudo -n /opt/plugins/check_icmp -H 10.0.0.1", want: true},
+		{name: "http", command: "/usr/lib/nagios/plugins/check_http -H example.com", want: false},
+		{name: "shell", command: "/bin/sh -c 'echo ok'", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := requiresSharedPIDNamespace(tt.command); got != tt.want {
+				t.Fatalf("requiresSharedPIDNamespace(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShellWorkersRawICMPCommandsUseDistinctPIDs(t *testing.T) {
+	workers := make([]*shellWorker, 2)
+	for i := range workers {
+		var err error
+		workers[i], err = newShellWorker(testSentinel())
+		if err != nil {
+			t.Fatalf("newShellWorker %d: %v", i, err)
+		}
+		defer workers[i].Close()
+	}
+
+	type result struct {
+		output string
+		code   int
+		err    error
+	}
+	results := make(chan result, len(workers))
+	start := make(chan struct{})
+	for _, sw := range workers {
+		go func(sw *shellWorker) {
+			<-start
+			// /usr/bin/fping is argv[0] for the inner shell and makes this a
+			// raw-ICMP-classified command without requiring fping to be installed.
+			output, code, err := sw.Run("/bin/sh -c 'sleep 0.1; echo $$' /usr/bin/fping", 5*time.Second)
+			results <- result{output: output, code: code, err: err}
+		}(sw)
+	}
+	close(start)
+
+	pids := make(map[int]struct{}, len(workers))
+	for range workers {
+		res := <-results
+		if res.err != nil || res.code != 0 {
+			t.Fatalf("raw ICMP command failed: code=%d output=%q err=%v", res.code, res.output, res.err)
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(res.output))
+		if err != nil {
+			t.Fatalf("parse PID %q: %v", res.output, err)
+		}
+		pids[pid] = struct{}{}
+	}
+	if len(pids) != len(workers) {
+		t.Fatalf("raw ICMP checks reused PIDs across workers: %v", pids)
+	}
+}
+
+func TestShellWorkerSharedPIDTimeoutKillsProcessGroup(t *testing.T) {
+	sw, err := newShellWorker(testSentinel())
+	if err != nil {
+		t.Fatalf("newShellWorker: %v", err)
+	}
+	defer sw.Close()
+
+	marker := fmt.Sprintf("/tmp/gogios-shared-pgrp-test-%d", time.Now().UnixNano())
+	cmd := fmt.Sprintf("/bin/sh -c '(sleep 30; touch %s) & echo started; wait' /usr/bin/fping", marker)
+	_, _, err = sw.Run(cmd, 500*time.Millisecond)
+	if !errors.Is(err, ErrCheckTimeout) {
+		t.Fatalf("expected ErrCheckTimeout, got %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if _, statErr := os.Stat(marker); statErr == nil {
+		os.Remove(marker)
+		t.Fatal("shared-PID grandchild survived timeout — process group kill failed")
 	}
 }
 
