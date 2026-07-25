@@ -281,6 +281,50 @@ func (d *DynamicTracker) Prune() {
 	d.store.Mu.Lock()
 	defer d.store.Mu.Unlock()
 
+	// Seed pass: adopt dynamic objects that exist in the store but have no
+	// tracker record.
+	//
+	// records is only ever written when a check result ARRIVES
+	// (EnsureHost/EnsureService/TouchRecord), and it starts empty on every
+	// boot. Dynamic objects, however, are also restored from the persisted
+	// generated cfg by registerHosts/registerServices, which set Dynamic=true
+	// directly on the store. A restored object whose host has stopped
+	// submitting therefore had no record, and since the passes below iterate
+	// records exclusively, the pruner never visited it: it became immortal and
+	// sat in livestatus forever, decaying into permanent false staleness that
+	// no TTL could clear and no operator command could remove (RemoveHost is
+	// called from here and nowhere else).
+	//
+	// Observed live: two k8s-local-stage-* hosts left behind by a node rename
+	// survived indefinitely because of exactly this.
+	//
+	// Seeding here rather than at startup keeps the fix self-contained -- there
+	// is no initialisation order to get wrong, and an object that appears by
+	// any future path is adopted too. Seeding with `now` deliberately grants a
+	// full TTL of grace, so a restart never prunes objects that simply have not
+	// re-reported yet.
+	now := time.Now()
+	for _, h := range d.store.Hosts {
+		if h == nil || !h.Dynamic {
+			continue
+		}
+		if _, ok := d.records[h.Name]; !ok {
+			d.records[h.Name] = now
+		}
+	}
+	for _, svc := range d.store.Services {
+		if svc == nil || !svc.Dynamic {
+			continue
+		}
+		if svc.Host == nil {
+			continue
+		}
+		key := svc.Host.Name + "\t" + svc.Description
+		if _, ok := d.records[key]; !ok {
+			d.records[key] = now
+		}
+	}
+
 	// First pass: prune stale services
 	for key, lastSeen := range d.records {
 		if !strings.Contains(key, "\t") {

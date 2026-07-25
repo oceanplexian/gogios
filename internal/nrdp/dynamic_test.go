@@ -482,3 +482,60 @@ func TestGeneratedCfgIncludesContactGroupsWhenPresent(t *testing.T) {
 		t.Fatalf("cfg missing expected contact_groups line:\n%s", cfg)
 	}
 }
+
+// A dynamic object restored from the persisted cfg has no tracker record,
+// because records is only written when a check result ARRIVES and is empty on
+// every boot. Prune iterates records, so before the seed pass such an object was
+// never visited and could never age out: it sat in livestatus forever as
+// permanent false staleness, unremovable (RemoveHost is called only from Prune).
+// Two k8s-local-stage-* hosts left behind by a node rename survived exactly this
+// way. Without the seed pass in Prune, this test fails.
+func TestPruneAdoptsRestoredObjectsWithNoRecord(t *testing.T) {
+	tracker, store := newTracker(t)
+
+	// Simulate a restart: the object is in the store and flagged Dynamic (as
+	// registerHosts does when reloading the generated cfg), but no result has
+	// arrived, so there is no tracker record.
+	store.Mu.Lock()
+	if err := store.AddHost(&objects.Host{Name: "restored", Dynamic: true}); err != nil {
+		t.Fatalf("AddHost: %v", err)
+	}
+	store.Mu.Unlock()
+
+	tracker.mu.Lock()
+	if _, ok := tracker.records["restored"]; ok {
+		t.Fatal("precondition failed: restored host should have no record")
+	}
+	tracker.mu.Unlock()
+
+	// First prune adopts it and grants a full TTL of grace, so a restart never
+	// prunes objects that simply have not re-reported yet.
+	tracker.Prune()
+
+	store.Mu.RLock()
+	if store.GetHost("restored") == nil {
+		t.Fatal("restored host was pruned immediately; it must get a full TTL of grace")
+	}
+	store.Mu.RUnlock()
+
+	tracker.mu.Lock()
+	seeded, ok := tracker.records["restored"]
+	tracker.mu.Unlock()
+	if !ok {
+		t.Fatal("restored host was not adopted into the tracker; it can never age out")
+	}
+
+	// Age it past the TTL: now it must actually prune, which is the property
+	// that was missing entirely.
+	tracker.mu.Lock()
+	tracker.records["restored"] = seeded.Add(-10 * time.Minute)
+	tracker.mu.Unlock()
+
+	tracker.Prune()
+
+	store.Mu.RLock()
+	defer store.Mu.RUnlock()
+	if store.GetHost("restored") != nil {
+		t.Error("adopted host still not pruned after exceeding TTL")
+	}
+}
