@@ -149,7 +149,8 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 		fmt.Fprintf(&buf, "    passive_checks_enabled  1\n")
 		fmt.Fprintf(&buf, "    notifications_enabled   1\n")
 		fmt.Fprintf(&buf, "    notification_period     24x7\n")
-		fmt.Fprintf(&buf, "    notification_interval   60\n")
+		fmt.Fprintf(&buf, "    notification_interval   %g\n",
+			dynamicServiceNotificationInterval(sv.host, sv.desc))
 		fmt.Fprintf(&buf, "    notification_options    w,u,c,r\n")
 		fmt.Fprintf(&buf, "    contact_groups          %s\n", d.contactGroupsCSV())
 		fmt.Fprintf(&buf, "    retain_status_information      1\n")
