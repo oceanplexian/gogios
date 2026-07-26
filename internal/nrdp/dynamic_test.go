@@ -107,6 +107,54 @@ func TestEnsureServiceIdempotent(t *testing.T) {
 	}
 }
 
+func TestOpenRouterCreditsNotifiesOncePerIncident(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+
+	store.Mu.Lock()
+	_ = store.AddHost(&objects.Host{
+		Name:    "central",
+		Alias:   "central",
+		Dynamic: false,
+	})
+	tracker.EnsureService("central", "OpenRouter Credits")
+	tracker.EnsureService("central", "Anycast DNS")
+	// Simulate the service restored from an older generated config. The next
+	// passive result must heal the live object as well as future config files.
+	openRouter := store.GetService("central", "OpenRouter Credits")
+	openRouter.NotificationInterval = 60
+	openRouter.CurrentNotificationNumber = 1
+	openRouter.NoMoreNotifications = false
+	tracker.EnsureService("central", "OpenRouter Credits")
+	store.Mu.Unlock()
+
+	if openRouter.NotificationInterval != 0 {
+		t.Fatalf("OpenRouter notification interval = %g, want notify-once interval 0",
+			openRouter.NotificationInterval)
+	}
+	if !openRouter.NoMoreNotifications {
+		t.Fatal("already-notified OpenRouter incident must suppress its pending repeat")
+	}
+	cfg := readCfg(t, path)
+	openRouterStart := strings.Index(cfg, "service_description     OpenRouter Credits")
+	if openRouterStart < 0 {
+		t.Fatalf("generated config missing OpenRouter Credits:\n%s", cfg)
+	}
+	openRouterEnd := strings.Index(cfg[openRouterStart:], "}\n")
+	openRouterStanza := cfg[openRouterStart : openRouterStart+openRouterEnd]
+	if !strings.Contains(openRouterStanza, "notification_interval   0") {
+		t.Fatalf("OpenRouter config must notify once per incident:\n%s", openRouterStanza)
+	}
+	anycastStart := strings.Index(cfg, "service_description     Anycast DNS")
+	if anycastStart < 0 {
+		t.Fatalf("generated config missing Anycast DNS:\n%s", cfg)
+	}
+	anycastEnd := strings.Index(cfg[anycastStart:], "}\n")
+	anycastStanza := cfg[anycastStart : anycastStart+anycastEnd]
+	if !strings.Contains(anycastStanza, "notification_interval   60") {
+		t.Fatalf("other dynamic services must retain recurring notifications:\n%s", anycastStanza)
+	}
+}
+
 func TestTouchRecordUpdatesTimestamp(t *testing.T) {
 	tracker, store := newTracker(t)
 

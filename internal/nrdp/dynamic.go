@@ -9,6 +9,20 @@ import (
 	"github.com/oceanplexian/gogios/internal/objects"
 )
 
+const defaultDynamicServiceNotificationInterval = 60.0
+
+func dynamicServiceNotificationInterval(hostname, servicename string) float64 {
+	// A low prepaid balance can remain actionable for hours while somebody
+	// tops up the account. Repeating the identical warning every five minutes
+	// creates a page storm without adding information. Interval zero still
+	// sends the initial problem and recovery notifications; a later incident
+	// starts a new notification cycle.
+	if hostname == "central" && servicename == "OpenRouter Credits" {
+		return 0
+	}
+	return defaultDynamicServiceNotificationInterval
+}
+
 // DynamicTracker manages auto-created NRDP hosts and services with TTL-based pruning.
 type DynamicTracker struct {
 	mu       sync.Mutex
@@ -199,6 +213,11 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 	d.EnsureHost(hostname)
 
 	if existing := d.store.GetService(hostname, servicename); existing != nil {
+		if existing.Dynamic {
+			interval := dynamicServiceNotificationInterval(hostname, servicename)
+			existing.NotificationInterval = interval
+			existing.NoMoreNotifications = interval == 0 && existing.CurrentNotificationNumber > 0
+		}
 		// Ensure bridge-admins is attached to pre-existing dynamic services so
 		// the nagios-bridge gets every state-change notification. Services
 		// created before bridge-admins existed have a stale contact_groups
@@ -237,7 +256,7 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 		ActiveChecksEnabled:  false,
 		NotificationsEnabled: true,
 		NotificationOptions:  objects.OptWarning | objects.OptCritical | objects.OptUnknown | objects.OptRecovery,
-		NotificationInterval: 60,
+		NotificationInterval: dynamicServiceNotificationInterval(hostname, servicename),
 		ContactGroups:        d.defaultContactGroups(),
 		Dynamic:              true,
 		LastSeen:             time.Now(),
