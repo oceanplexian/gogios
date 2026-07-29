@@ -656,3 +656,52 @@ func TestPruneAdoptsRestoredObjectsWithNoRecord(t *testing.T) {
 		t.Error("adopted host still not pruned after exceeding TTL")
 	}
 }
+
+func TestHealLoadedObjectsAppliesPolicyBeforeFirstPassiveResult(t *testing.T) {
+	tracker, store := newTracker(t)
+	hostname := "k8s-local-a1b2c3.fieldio.com"
+	host := &objects.Host{
+		Name:                hostname,
+		Dynamic:             true,
+		ActiveChecksEnabled: true,
+		ShouldBeScheduled:   true,
+	}
+	if err := store.AddHost(host); err != nil {
+		t.Fatal(err)
+	}
+	addService := func(description string) *objects.Service {
+		service := &objects.Service{
+			Host:                host,
+			Description:         description,
+			Dynamic:             true,
+			ActiveChecksEnabled: true,
+		}
+		if err := store.AddService(service); err != nil {
+			t.Fatal(err)
+		}
+		host.Services = append(host.Services, service)
+		return service
+	}
+	nrdc := addService("nrdc")
+	nodeReady := addService("K8s Node Ready")
+	kubelet := addService("K8s Kubelet Health")
+
+	tracker.HealLoadedObjects()
+
+	if host.ActiveChecksEnabled || host.ShouldBeScheduled || !host.PassiveChecksEnabled {
+		t.Fatalf("host was not healed to passive root: %#v", host)
+	}
+	if !nrdc.CheckFreshness || nrdc.FreshnessThreshold != nrdcServiceFreshnessSeconds {
+		t.Fatalf("nrdc freshness = %v/%d", nrdc.CheckFreshness, nrdc.FreshnessThreshold)
+	}
+	if !nodeReady.CheckFreshness || !kubelet.CheckFreshness {
+		t.Fatal("restored services did not get freshness policy")
+	}
+	if len(kubelet.NotifyDeps) != 2 {
+		t.Fatalf("kubelet parents = %d, want nrdc + Node Ready", len(kubelet.NotifyDeps))
+	}
+	if len(host.HostGroups) != 2 || len(kubelet.ServiceGroups) != 2 {
+		t.Fatalf("group policy missing: host=%d service=%d",
+			len(host.HostGroups), len(kubelet.ServiceGroups))
+	}
+}

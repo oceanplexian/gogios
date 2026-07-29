@@ -890,6 +890,9 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 				})
 			}
 		}
+		if nrdpTracker != nil {
+			nrdpTracker.HealLoadedObjects()
+		}
 
 		if err := nrdpServer.Start(); err != nil {
 			nagLogger.Log("Warning: Failed to start NRDP server: %v", err)

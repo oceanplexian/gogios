@@ -152,23 +152,9 @@ func (d *DynamicTracker) EnsureHost(hostname string) {
 		// names with no DNS record), while still giving Nagios a real host root
 		// that suppresses all child service noise when the producer disappears.
 		if existing.Dynamic {
-			now := time.Now()
-			existing.ActiveChecksEnabled = false
-			existing.PassiveChecksEnabled = true
-			existing.ShouldBeScheduled = false
-			existing.CheckCommand = nil
-			existing.CheckCommandArgs = ""
-			if d.hostCheckCmd != "" {
-				if cmd := d.store.GetCommand(d.hostCheckCmd); cmd != nil {
-					existing.CheckCommand = cmd
-					existing.ActiveChecksEnabled = true
-					existing.ShouldBeScheduled = true
-				}
-			}
-			existing.RetainStatusInformation = true
-			existing.RetainNonstatusInformation = false
-			d.attachDynamicHostGroups(existing)
+			d.healDynamicHost(existing)
 			if !existing.HasBeenChecked {
+				now := time.Now()
 				existing.CurrentState = objects.HostUp
 				existing.StateType = objects.StateTypeHard
 				existing.HasBeenChecked = true
@@ -258,24 +244,7 @@ func (d *DynamicTracker) EnsureService(hostname, servicename string) {
 
 	if existing := d.store.GetService(hostname, servicename); existing != nil {
 		if existing.Dynamic {
-			interval := dynamicServiceNotificationInterval(hostname, servicename)
-			existing.NotificationInterval = interval
-			existing.NoMoreNotifications = interval == 0 && existing.CurrentNotificationNumber > 0
-			existing.MaxCheckAttempts = 1
-			existing.PassiveChecksEnabled = true
-			existing.ActiveChecksEnabled = false
-			existing.ShouldBeScheduled = false
-			existing.CheckFreshness = true
-			existing.FreshnessThreshold = dynamicServiceFreshnessThreshold(hostname, servicename)
-			existing.NotificationsEnabled = dynamicServiceNotificationsEnabled(hostname, servicename)
-			existing.NotificationOptions = dynamicServiceNotificationOptions(servicename)
-			existing.RetainStatusInformation = true
-			existing.RetainNonstatusInformation = false
-			if cmd := d.store.GetCommand("check_dummy"); cmd != nil {
-				existing.CheckCommand = cmd
-				existing.CheckCommandArgs = "3!UNKNOWN - passive result stale"
-			}
-			d.attachDynamicServiceGroups(existing)
+			d.healDynamicService(existing)
 		}
 		// Ensure bridge-admins is attached to pre-existing dynamic services so
 		// the nagios-bridge gets every state-change notification. Services
@@ -491,6 +460,72 @@ func (d *DynamicTracker) defaultContactGroups() []*objects.ContactGroup {
 		}
 	}
 	return cgs
+}
+
+// HealLoadedObjects applies current dynamic-object policy immediately after
+// config + retention loading. Without this startup pass, low-frequency passive
+// services keep old active/freshness/group flags until their next result,
+// creating a policy hole that can last for hours after every rollout.
+func (d *DynamicTracker) HealLoadedObjects() {
+	d.store.Mu.Lock()
+	defer d.store.Mu.Unlock()
+
+	for _, host := range d.store.Hosts {
+		if host != nil && host.Dynamic {
+			d.healDynamicHost(host)
+		}
+	}
+	for _, service := range d.store.Services {
+		if service != nil && service.Dynamic {
+			d.healDynamicService(service)
+		}
+	}
+	for _, host := range d.store.Hosts {
+		if host != nil {
+			d.ensureDynamicServiceDependenciesForHost(host.Name)
+		}
+	}
+}
+
+func (d *DynamicTracker) healDynamicHost(host *objects.Host) {
+	host.ActiveChecksEnabled = false
+	host.PassiveChecksEnabled = true
+	host.ShouldBeScheduled = false
+	host.CheckCommand = nil
+	host.CheckCommandArgs = ""
+	if d.hostCheckCmd != "" {
+		if cmd := d.store.GetCommand(d.hostCheckCmd); cmd != nil {
+			host.CheckCommand = cmd
+			host.ActiveChecksEnabled = true
+			host.ShouldBeScheduled = true
+		}
+	}
+	host.RetainStatusInformation = true
+	host.RetainNonstatusInformation = false
+	d.attachDynamicHostGroups(host)
+}
+
+func (d *DynamicTracker) healDynamicService(service *objects.Service) {
+	hostname := service.Host.Name
+	servicename := service.Description
+	interval := dynamicServiceNotificationInterval(hostname, servicename)
+	service.NotificationInterval = interval
+	service.NoMoreNotifications = interval == 0 && service.CurrentNotificationNumber > 0
+	service.MaxCheckAttempts = 1
+	service.PassiveChecksEnabled = true
+	service.ActiveChecksEnabled = false
+	service.ShouldBeScheduled = false
+	service.CheckFreshness = true
+	service.FreshnessThreshold = dynamicServiceFreshnessThreshold(hostname, servicename)
+	service.NotificationsEnabled = dynamicServiceNotificationsEnabled(hostname, servicename)
+	service.NotificationOptions = dynamicServiceNotificationOptions(servicename)
+	service.RetainStatusInformation = true
+	service.RetainNonstatusInformation = false
+	if cmd := d.store.GetCommand("check_dummy"); cmd != nil {
+		service.CheckCommand = cmd
+		service.CheckCommandArgs = "3!UNKNOWN - passive result stale"
+	}
+	d.attachDynamicServiceGroups(service)
 }
 
 func (d *DynamicTracker) attachDynamicHostGroups(host *objects.Host) {
