@@ -17,6 +17,7 @@ const (
 	containerdRollupServiceName    = "Containerd Health (All Nodes)"
 	defaultServiceFreshnessSeconds = 1800
 	nrdcServiceFreshnessSeconds    = 180
+	centralNrdcFreshnessSeconds    = 600
 	centralServiceFreshnessSeconds = 21600
 )
 
@@ -34,11 +35,20 @@ func dynamicServiceNotificationInterval(hostname, servicename string) float64 {
 
 func dynamicServiceFreshnessThreshold(hostname, servicename string) int {
 	switch {
+	case hostname == "central" && servicename == nrdcServiceName:
+		// The central producer batches more than 170 checks. Its self-result
+		// legitimately has gaps approaching four minutes, and a fresh pod can
+		// need about five minutes to publish the first summary. Ten minutes
+		// preserves prompt producer-loss detection without flapping during
+		// normal batching or rollout warm-up.
+		return centralNrdcFreshnessSeconds
 	case servicename == nrdcServiceName:
+		// Small per-host agents report much more frequently, so retain the
+		// tighter producer-loss detector everywhere except central.
 		return nrdcServiceFreshnessSeconds
 	case hostname == "central":
 		// Central rollups include intentionally low-frequency checks (up to
-		// five hours). Six hours detects a dead producer without turning the
+		// two hours). Six hours detects a dead producer without turning the
 		// legitimate cadence into a false freshness incident.
 		return centralServiceFreshnessSeconds
 	default:

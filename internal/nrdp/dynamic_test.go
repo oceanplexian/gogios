@@ -116,6 +116,47 @@ func TestEnsureServiceCreatesHostAndService(t *testing.T) {
 	}
 }
 
+func TestDynamicServiceFreshnessThresholds(t *testing.T) {
+	tests := []struct {
+		name        string
+		host        string
+		service     string
+		wantSeconds int
+	}{
+		{
+			name:        "central producer allows batching and warm-up",
+			host:        "central",
+			service:     "nrdc",
+			wantSeconds: centralNrdcFreshnessSeconds,
+		},
+		{
+			name:        "per-host producer remains tight",
+			host:        "k8s-local-a1b2c3.fieldio.com",
+			service:     "nrdc",
+			wantSeconds: nrdcServiceFreshnessSeconds,
+		},
+		{
+			name:        "central low-frequency service",
+			host:        "central",
+			service:     "FN2 Frozen Adjunct Platform Contract",
+			wantSeconds: centralServiceFreshnessSeconds,
+		},
+		{
+			name:        "ordinary passive service",
+			host:        "worker-1",
+			service:     "Disk",
+			wantSeconds: defaultServiceFreshnessSeconds,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := dynamicServiceFreshnessThreshold(test.host, test.service); got != test.wantSeconds {
+				t.Fatalf("freshness threshold = %d, want %d", got, test.wantSeconds)
+			}
+		})
+	}
+}
+
 func TestEnsureServiceIdempotent(t *testing.T) {
 	tracker, store := newTracker(t)
 
