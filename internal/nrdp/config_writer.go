@@ -99,13 +99,6 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 		fmt.Fprintf(&buf, "    host_name               %s\n", h)
 		fmt.Fprintf(&buf, "    alias                   %s\n", h)
 		fmt.Fprintf(&buf, "    address                 %s\n", h)
-		// max_check_attempts=1 + passive-only matches what NRDP submitters
-		// expect: every passive result is authoritative, no soft-state
-		// retries. Active checks are only enabled when SetHostCheckCommand
-		// is called with a non-empty command name — many NRDP-discovered
-		// hosts have NO DNS A record (fn2ai-east, fn2-prod-*) so running
-		// fping against them returns "Invalid hostname/address" and flips
-		// state DOWN even though passive results are landing fine.
 		fmt.Fprintf(&buf, "    max_check_attempts      1\n")
 		fmt.Fprintf(&buf, "    check_interval          5\n")
 		fmt.Fprintf(&buf, "    retry_interval          1\n")
@@ -114,14 +107,9 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 			fmt.Fprintf(&buf, "    check_command           %s\n", d.hostCheckCmd)
 			fmt.Fprintf(&buf, "    active_checks_enabled   1\n")
 		} else {
-			// No real check command configured — run check_dummy on the
-			// normal interval so last_check stays fresh and the host shows
-			// as UP. We can't use fping for many NRDP hosts (fn2-prod-*,
-			// fn2ai-*) because their hostnames don't resolve, and dropping
-			// active checks entirely leaves last_check pinned at registration
-			// time (looks broken in the UI).
-			fmt.Fprintf(&buf, "    check_command           check_dummy!0!OK\n")
-			fmt.Fprintf(&buf, "    active_checks_enabled   1\n")
+			// The nrdc service is the producer root and drives dynamic host
+			// state. Do not let an always-OK dummy check mask a dead host.
+			fmt.Fprintf(&buf, "    active_checks_enabled   0\n")
 		}
 		fmt.Fprintf(&buf, "    passive_checks_enabled  1\n")
 		fmt.Fprintf(&buf, "    notifications_enabled   1\n")
@@ -129,8 +117,10 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 		fmt.Fprintf(&buf, "    notification_interval   120\n")
 		fmt.Fprintf(&buf, "    notification_options    d,u,r\n")
 		fmt.Fprintf(&buf, "    contact_groups          %s\n", d.contactGroupsCSV())
+		fmt.Fprintf(&buf, "    hostgroups              %s\n",
+			strings.Join(dynamicHostGroupNames(h), ","))
 		fmt.Fprintf(&buf, "    retain_status_information      1\n")
-		fmt.Fprintf(&buf, "    retain_nonstatus_information   1\n")
+		fmt.Fprintf(&buf, "    retain_nonstatus_information   0\n")
 		fmt.Fprintf(&buf, "}\n\n")
 	}
 
@@ -138,42 +128,58 @@ func (d *DynamicTracker) writeGeneratedConfigLocked() {
 		fmt.Fprintf(&buf, "define service {\n")
 		fmt.Fprintf(&buf, "    host_name               %s\n", sv.host)
 		fmt.Fprintf(&buf, "    service_description     %s\n", sv.desc)
-		// check_dummy with rc=0 is the canonical passive-only placeholder
-		// (matches what nrdp-micro emitted for these same services).
-		fmt.Fprintf(&buf, "    check_command           check_dummy!0!OK\n")
+		// This command only runs when freshness forces an active execution.
+		// A stale passive producer must fail closed, never synthesize green.
+		fmt.Fprintf(&buf, "    check_command           check_dummy!3!UNKNOWN - passive result stale\n")
 		fmt.Fprintf(&buf, "    max_check_attempts      1\n")
 		fmt.Fprintf(&buf, "    check_interval          5\n")
 		fmt.Fprintf(&buf, "    retry_interval          1\n")
 		fmt.Fprintf(&buf, "    check_period            24x7\n")
 		fmt.Fprintf(&buf, "    active_checks_enabled   0\n")
 		fmt.Fprintf(&buf, "    passive_checks_enabled  1\n")
-		fmt.Fprintf(&buf, "    notifications_enabled   1\n")
+		if dynamicServiceNotificationsEnabled(sv.host, sv.desc) {
+			fmt.Fprintf(&buf, "    notifications_enabled   1\n")
+		} else {
+			fmt.Fprintf(&buf, "    notifications_enabled   0\n")
+		}
+		fmt.Fprintf(&buf, "    check_freshness         1\n")
+		fmt.Fprintf(&buf, "    freshness_threshold     %d\n",
+			dynamicServiceFreshnessThreshold(sv.host, sv.desc))
 		fmt.Fprintf(&buf, "    notification_period     24x7\n")
 		fmt.Fprintf(&buf, "    notification_interval   %g\n",
 			dynamicServiceNotificationInterval(sv.host, sv.desc))
-		fmt.Fprintf(&buf, "    notification_options    w,u,c,r\n")
+		fmt.Fprintf(&buf, "    notification_options    %s\n",
+			dynamicServiceNotificationCriteria(sv.desc))
 		fmt.Fprintf(&buf, "    contact_groups          %s\n", d.contactGroupsCSV())
+		fmt.Fprintf(&buf, "    servicegroups           %s\n",
+			strings.Join(dynamicServiceGroupNames(sv.host, sv.desc), ","))
 		fmt.Fprintf(&buf, "    retain_status_information      1\n")
-		fmt.Fprintf(&buf, "    retain_nonstatus_information   1\n")
+		fmt.Fprintf(&buf, "    retain_nonstatus_information   0\n")
 		fmt.Fprintf(&buf, "}\n\n")
 	}
 
+	writtenDependencies := make(map[string]bool)
 	for _, sv := range services {
 		for _, rule := range dynamicServiceDependencyRules {
-			if sv.desc != rule.dependent {
+			if !rule.matchesHost(sv.host) || !rule.matchesDependent(sv.desc) {
 				continue
 			}
 			if _, ok := serviceSet[svcKey{host: sv.host, desc: rule.master}]; !ok {
 				continue
 			}
+			dependencyKey := sv.host + "\t" + rule.master + "\t" + sv.desc
+			if writtenDependencies[dependencyKey] {
+				continue
+			}
+			writtenDependencies[dependencyKey] = true
 			fmt.Fprintf(&buf, "define servicedependency {\n")
 			fmt.Fprintf(&buf, "    host_name                       %s\n", sv.host)
 			fmt.Fprintf(&buf, "    service_description             %s\n", rule.master)
 			fmt.Fprintf(&buf, "    dependent_host_name             %s\n", sv.host)
-			fmt.Fprintf(&buf, "    dependent_service_description   %s\n", rule.dependent)
+			fmt.Fprintf(&buf, "    dependent_service_description   %s\n", sv.desc)
 			fmt.Fprintf(&buf, "    dependency_period               24x7\n")
-			fmt.Fprintf(&buf, "    execution_failure_criteria      %s\n", dynamicServiceDependencyCriteria)
-			fmt.Fprintf(&buf, "    notification_failure_criteria   %s\n", dynamicServiceDependencyCriteria)
+			fmt.Fprintf(&buf, "    execution_failure_criteria      %s\n", dynamicServiceExecutionDependencyCriteria)
+			fmt.Fprintf(&buf, "    notification_failure_criteria   %s\n", dynamicServiceNotificationDependencyCriteria)
 			fmt.Fprintf(&buf, "}\n\n")
 		}
 	}

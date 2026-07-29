@@ -20,14 +20,16 @@ type Scheduler struct {
 	stopCh    chan struct{}
 
 	// Callbacks set by the application
-	OnRunServiceCheck func(svc *objects.Service, options int)
-	OnRunHostCheck    func(host *objects.Host, options int)
-	OnStatusSave      func()
-	OnRetentionSave   func()
-	OnLogRotation     func()
-	OnExpireDowntime  func()
-	OnProcessResult   func(cr *objects.CheckResult)
-	OnProcessResults  func(results []*objects.CheckResult) // batch version — preferred over OnProcessResult
+	OnRunServiceCheck       func(svc *objects.Service, options int)
+	OnRunHostCheck          func(host *objects.Host, options int)
+	OnStatusSave            func()
+	OnRetentionSave         func()
+	OnLogRotation           func()
+	OnExpireDowntime        func()
+	OnServiceFreshnessCheck func(now time.Time)
+	OnHostFreshnessCheck    func(now time.Time)
+	OnProcessResult         func(cr *objects.CheckResult)
+	OnProcessResults        func(results []*objects.CheckResult) // batch version — preferred over OnProcessResult
 
 	// Counters
 	currentlyRunningServiceChecks int
@@ -399,8 +401,15 @@ func (s *Scheduler) handleEvent(e *Event, now time.Time) {
 			s.OnLogRotation()
 		}
 
-	case EventSFreshnessCheck, EventHFreshnessCheck:
-		// Handled via callback in OnProcessResult or separate freshness checker
+	case EventSFreshnessCheck:
+		if s.OnServiceFreshnessCheck != nil {
+			s.OnServiceFreshnessCheck(now)
+		}
+
+	case EventHFreshnessCheck:
+		if s.OnHostFreshnessCheck != nil {
+			s.OnHostFreshnessCheck(now)
+		}
 
 	case EventOrphanCheck:
 		s.checkOrphans(now)
@@ -536,6 +545,18 @@ func (s *Scheduler) compensateTimeChange(now time.Time) {
 // created hosts after the scheduler has been initialized.
 func (s *Scheduler) RegisterHost(h *objects.Host) {
 	s.hosts[h.Name] = h
+}
+
+// RegisterService adds a service to the scheduler's lookup map so a forced
+// freshness check can execute for services dynamically created after Init.
+func (s *Scheduler) RegisterService(svc *objects.Service) {
+	if svc == nil || svc.Host == nil {
+		return
+	}
+	if s.services[svc.Host.Name] == nil {
+		s.services[svc.Host.Name] = make(map[string]*objects.Service)
+	}
+	s.services[svc.Host.Name][svc.Description] = svc
 }
 
 // AddEvent adds an event to the queue.

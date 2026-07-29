@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -15,11 +16,11 @@ type Logger interface {
 
 // NotificationEngine handles all notification logic.
 type NotificationEngine struct {
-	GlobalState    *objects.GlobalState
-	Store          *objects.ObjectStore
-	Logger         Logger
-	CmdExecutor    *CommandExecutor
-	nextNotifID    atomic.Uint64
+	GlobalState *objects.GlobalState
+	Store       *objects.ObjectStore
+	Logger      Logger
+	CmdExecutor *CommandExecutor
+	nextNotifID atomic.Uint64
 }
 
 // NewNotificationEngine creates a new notification engine.
@@ -255,6 +256,10 @@ func (ne *NotificationEngine) checkServiceNotificationViability(svc *objects.Ser
 		return 1
 	}
 
+	if svc.CurrentState != objects.ServiceOK && ne.hostInPlannedMaintenance(svc.Host, time.Now()) {
+		return 1
+	}
+
 	// Service notification dependencies
 	if dependency.CheckServiceDependencies(svc, objects.NotificationDependency, ne.softStateDeps()) != dependency.DependenciesOK {
 		return 1
@@ -380,6 +385,10 @@ func (ne *NotificationEngine) checkHostNotificationViability(hst *objects.Host, 
 		return 1
 	}
 
+	if hst.CurrentState != objects.HostUp && ne.hostInPlannedMaintenance(hst, time.Now()) {
+		return 1
+	}
+
 	if dependency.CheckHostDependencies(hst, objects.NotificationDependency, ne.softStateDeps()) != dependency.DependenciesOK {
 		return 1
 	}
@@ -424,6 +433,28 @@ func (ne *NotificationEngine) checkHostNotificationViability(hst *objects.Host, 
 	}
 
 	return 0
+}
+
+// hostInPlannedMaintenance recognizes the intentionally-cordoned state
+// produced by the NRDP normalizer. The marker expires with the Node Ready
+// service's freshness threshold, so an abandoned maintenance never becomes
+// an indefinite notification blackout.
+func (ne *NotificationEngine) hostInPlannedMaintenance(host *objects.Host, now time.Time) bool {
+	if ne.Store == nil || host == nil {
+		return false
+	}
+	nodeReady := ne.Store.GetService(host.Name, "K8s Node Ready")
+	if nodeReady == nil ||
+		nodeReady.CurrentState != objects.ServiceWarning ||
+		!strings.HasPrefix(nodeReady.PluginOutput, "MAINTENANCE - intentionally cordoned:") ||
+		nodeReady.LastCheck.IsZero() {
+		return false
+	}
+	threshold := nodeReady.FreshnessThreshold
+	if threshold <= 0 {
+		threshold = 1800
+	}
+	return now.Sub(nodeReady.LastCheck) <= time.Duration(threshold)*time.Second
 }
 
 // checkContactServiceViability checks per-contact filters.
@@ -619,19 +650,19 @@ func (ne *NotificationEngine) notifyContactOfService(contact *objects.Contact, s
 	for _, cmd := range contact.ServiceNotificationCommands {
 		macros := map[string]string{
 			"NOTIFICATIONTYPE":    typeName,
-			"CONTACTNAME":        contact.Name,
-			"CONTACTEMAIL":       contact.Email,
-			"CONTACTPAGER":       contact.Pager,
-			"HOSTNAME":           svc.Host.Name,
-			"HOSTALIAS":          svc.Host.Alias,
-			"HOSTADDRESS":        svc.Host.Address,
-			"SERVICEDESC":        svc.Description,
-			"SERVICESTATE":       objects.ServiceStateName(svc.CurrentState),
-			"SERVICESTATETYPE":   objects.StateTypeName(svc.StateType),
-			"SERVICEATTEMPT":     itoa(svc.CurrentAttempt),
-			"MAXSERVICEATTEMPTS": itoa(svc.MaxCheckAttempts),
-			"SERVICEOUTPUT":      svc.PluginOutput,
-			"LONGSERVICEOUTPUT":  svc.LongPluginOutput,
+			"CONTACTNAME":         contact.Name,
+			"CONTACTEMAIL":        contact.Email,
+			"CONTACTPAGER":        contact.Pager,
+			"HOSTNAME":            svc.Host.Name,
+			"HOSTALIAS":           svc.Host.Alias,
+			"HOSTADDRESS":         svc.Host.Address,
+			"SERVICEDESC":         svc.Description,
+			"SERVICESTATE":        objects.ServiceStateName(svc.CurrentState),
+			"SERVICESTATETYPE":    objects.StateTypeName(svc.StateType),
+			"SERVICEATTEMPT":      itoa(svc.CurrentAttempt),
+			"MAXSERVICEATTEMPTS":  itoa(svc.MaxCheckAttempts),
+			"SERVICEOUTPUT":       svc.PluginOutput,
+			"LONGSERVICEOUTPUT":   svc.LongPluginOutput,
 			"NOTIFICATIONAUTHOR":  author,
 			"NOTIFICATIONCOMMENT": data,
 		}
@@ -652,18 +683,18 @@ func (ne *NotificationEngine) notifyContactOfHost(contact *objects.Contact, hst 
 	for _, cmd := range contact.HostNotificationCommands {
 		macros := map[string]string{
 			"NOTIFICATIONTYPE":    typeName,
-			"CONTACTNAME":        contact.Name,
-			"CONTACTEMAIL":       contact.Email,
-			"CONTACTPAGER":       contact.Pager,
-			"HOSTNAME":           hst.Name,
-			"HOSTALIAS":          hst.Alias,
-			"HOSTADDRESS":        hst.Address,
-			"HOSTSTATE":          objects.HostStateName(hst.CurrentState),
-			"HOSTSTATETYPE":      objects.StateTypeName(hst.StateType),
-			"HOSTATTEMPT":        itoa(hst.CurrentAttempt),
-			"MAXHOSTATTEMPTS":    itoa(hst.MaxCheckAttempts),
-			"HOSTOUTPUT":         hst.PluginOutput,
-			"LONGHOSTOUTPUT":     hst.LongPluginOutput,
+			"CONTACTNAME":         contact.Name,
+			"CONTACTEMAIL":        contact.Email,
+			"CONTACTPAGER":        contact.Pager,
+			"HOSTNAME":            hst.Name,
+			"HOSTALIAS":           hst.Alias,
+			"HOSTADDRESS":         hst.Address,
+			"HOSTSTATE":           objects.HostStateName(hst.CurrentState),
+			"HOSTSTATETYPE":       objects.StateTypeName(hst.StateType),
+			"HOSTATTEMPT":         itoa(hst.CurrentAttempt),
+			"MAXHOSTATTEMPTS":     itoa(hst.MaxCheckAttempts),
+			"HOSTOUTPUT":          hst.PluginOutput,
+			"LONGHOSTOUTPUT":      hst.LongPluginOutput,
 			"NOTIFICATIONAUTHOR":  author,
 			"NOTIFICATIONCOMMENT": data,
 		}

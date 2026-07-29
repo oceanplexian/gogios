@@ -23,6 +23,7 @@ import (
 	"github.com/oceanplexian/gogios/internal/config"
 	"github.com/oceanplexian/gogios/internal/downtime"
 	"github.com/oceanplexian/gogios/internal/extcmd"
+	"github.com/oceanplexian/gogios/internal/freshness"
 	"github.com/oceanplexian/gogios/internal/logging"
 	"github.com/oceanplexian/gogios/internal/macros"
 	"github.com/oceanplexian/gogios/internal/notify"
@@ -471,7 +472,7 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 
 	// Retention writer/reader
 	retentionWriter := &status.RetentionWriter{
-		Path: mainCfg.StateRetentionFile,
+		Path:      mainCfg.StateRetentionFile,
 		Store:     store,
 		Global:    globalState,
 		Comments:  commentMgr,
@@ -512,7 +513,7 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 
 	// --- Service result handler ---
 	svcHandler := &checker.ServiceResultHandler{
-		Cfg: cfg,
+		Cfg:        cfg,
 		HostLookup: store.GetHost,
 		OnNotification: func(svc *objects.Service, notifType int) {
 			notifEngine.ServiceNotification(svc, notifType, "", "", 0)
@@ -562,15 +563,15 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		if host.CheckCommand == nil {
 			// Hosts without check commands are assumed UP
 			resultCh <- &objects.CheckResult{
-				HostName:      host.Name,
-				CheckType:     objects.CheckTypeActive,
-				CheckOptions:  options,
-				ReturnCode:    0,
-				Output:        "(No check command defined - host assumed UP)",
-				StartTime:     time.Now(),
-				FinishTime:    time.Now(),
-				ExitedOK:      true,
-				Latency:       host.Latency,
+				HostName:     host.Name,
+				CheckType:    objects.CheckTypeActive,
+				CheckOptions: options,
+				ReturnCode:   0,
+				Output:       "(No check command defined - host assumed UP)",
+				StartTime:    time.Now(),
+				FinishTime:   time.Now(),
+				ExitedOK:     true,
+				Latency:      host.Latency,
 			}
 			return
 		}
@@ -611,6 +612,7 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 				if cr.ServiceDescription != "" {
 					if svc := store.GetService(cr.HostName, cr.ServiceDescription); svc != nil {
 						svc.LastSeen = cr.FinishTime
+						sched.RegisterService(svc)
 					}
 				}
 				nrdpTracker.TouchRecord(cr.HostName, cr.ServiceDescription)
@@ -620,6 +622,31 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 				svc := store.GetService(cr.HostName, cr.ServiceDescription)
 				if svc == nil {
 					continue
+				}
+
+				// For dynamic passive hosts, nrdc is the producer root and
+				// therefore the host check itself. Mirror it before handling
+				// the service so a dead producer yields one host-root incident
+				// and Nagios suppresses the dependent service fan-out.
+				if svc.Dynamic && svc.Description == "nrdc" {
+					if host := svc.Host; host != nil && host.Dynamic {
+						hostReturnCode := 0
+						if cr.ReturnCode != objects.ServiceOK {
+							hostReturnCode = 1
+						}
+						hostResult := &objects.CheckResult{
+							HostName:     host.Name,
+							CheckType:    objects.CheckTypePassive,
+							CheckOptions: cr.CheckOptions,
+							ReturnCode:   hostReturnCode,
+							Output:       "NRDP producer nrdc: " + cr.Output,
+							StartTime:    cr.StartTime,
+							FinishTime:   cr.FinishTime,
+							ExitedOK:     cr.ExitedOK,
+						}
+						hostHandler.HandleResult(host, hostResult)
+						downtimeMgr.CheckPendingFlexHostDowntime(host.Name, host.CurrentState)
+					}
 				}
 				svcHandler.HandleResult(svc, cr)
 				sched.DecrementRunningServiceChecks()
@@ -690,6 +717,38 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 		downtimeMgr.CheckExpired()
 	}
 
+	freshnessChecker := &freshness.Checker{
+		Cfg:        cfg,
+		EventStart: globalState.ProgramStart,
+		ScheduleServiceCheck: func(svc *objects.Service, runAt time.Time, options int) {
+			sched.AddEvent(&scheduler.Event{
+				Type:               scheduler.EventServiceCheck,
+				RunTime:            runAt,
+				HostName:           svc.Host.Name,
+				ServiceDescription: svc.Description,
+				CheckOptions:       options,
+			})
+		},
+		ScheduleHostCheck: func(host *objects.Host, runAt time.Time, options int) {
+			sched.AddEvent(&scheduler.Event{
+				Type:         scheduler.EventHostCheck,
+				RunTime:      runAt,
+				HostName:     host.Name,
+				CheckOptions: options,
+			})
+		},
+	}
+	sched.OnServiceFreshnessCheck = func(now time.Time) {
+		store.Mu.Lock()
+		defer store.Mu.Unlock()
+		freshnessChecker.CheckServiceFreshness(store.Services, now)
+	}
+	sched.OnHostFreshnessCheck = func(now time.Time) {
+		store.Mu.Lock()
+		defer store.Mu.Unlock()
+		freshnessChecker.CheckHostFreshness(store.Hosts, now)
+	}
+
 	// Schedule the initial log rotation event if time-based rotation is enabled.
 	if logRotation != objects.LogRotationNone {
 		nextRot := nagLogger.NextRotationTime(time.Now())
@@ -751,11 +810,11 @@ func runDaemon(configFile string, daemonMode bool, verbosity int) {
 	if mainCfg.QuerySocket != "" || mainCfg.LivestatusTCP != "" {
 		livestatusServer = livestatus.New(mainCfg.QuerySocket, mainCfg.LivestatusTCP)
 		apiState := &api.StateProvider{
-			Store:     store,
-			Global:    globalState,
-			Comments:  commentMgr,
-			Downtimes: downtimeMgr,
-			Logger:    nagLogger,
+			Store:          store,
+			Global:         globalState,
+			Comments:       commentMgr,
+			Downtimes:      downtimeMgr,
+			Logger:         nagLogger,
 			LogFile:        mainCfg.LogFile,
 			LogArchivePath: mainCfg.LogArchivePath,
 		}

@@ -15,6 +15,25 @@ import (
 func newTracker(t *testing.T) (*DynamicTracker, *objects.ObjectStore) {
 	t.Helper()
 	store := objects.NewObjectStore()
+	_ = store.AddCommand(&objects.Command{Name: "check_dummy"})
+	_ = store.AddTimeperiod(&objects.Timeperiod{Name: "24x7"})
+	for _, name := range []string{
+		"discovered-hosts",
+		"k8s-local-nodes",
+		"storage-servers",
+		"ai-servers",
+	} {
+		_ = store.AddHostGroup(&objects.HostGroup{Name: name})
+	}
+	for _, name := range []string{
+		"passive-services",
+		"kubernetes-node-services",
+		"kubernetes-cluster-services",
+		"dns-services",
+		"fn2-services",
+	} {
+		_ = store.AddServiceGroup(&objects.ServiceGroup{Name: name})
+	}
 	tracker := NewDynamicTracker(store, 5*time.Minute, 1*time.Minute)
 	// Suppress log output in tests
 	tracker.SetLogger(func(string, ...interface{}) {})
@@ -83,6 +102,17 @@ func TestEnsureServiceCreatesHostAndService(t *testing.T) {
 	}
 	if !svc.Dynamic {
 		t.Error("svc.Dynamic = false, want true")
+	}
+	if !svc.CheckFreshness || svc.FreshnessThreshold != defaultServiceFreshnessSeconds {
+		t.Errorf("freshness = enabled:%v threshold:%d, want enabled:%v threshold:%d",
+			svc.CheckFreshness, svc.FreshnessThreshold, true, defaultServiceFreshnessSeconds)
+	}
+	if svc.ActiveChecksEnabled || !svc.PassiveChecksEnabled {
+		t.Errorf("service check mode = active:%v passive:%v, want passive-only",
+			svc.ActiveChecksEnabled, svc.PassiveChecksEnabled)
+	}
+	if svc.CheckCommand == nil || svc.CheckCommandArgs != "3!UNKNOWN - passive result stale" {
+		t.Errorf("freshness command = %#v args=%q", svc.CheckCommand, svc.CheckCommandArgs)
 	}
 }
 
@@ -318,53 +348,67 @@ func TestGeneratedCfgContainsEnsuredService(t *testing.T) {
 	}
 }
 
-func TestEnsureServiceWiresSystemdFDDependency(t *testing.T) {
+func TestEnsureServiceWiresProducerAndK8sDependencies(t *testing.T) {
 	tracker, store := newTracker(t)
+	hostname := "k8s-local-a1b2c3.fieldio.com"
 
 	store.Mu.Lock()
-	tracker.EnsureService("node-01", "K8s Node Ready")
-	tracker.EnsureService("node-01", "Systemd FD Exhaustion")
-	tracker.EnsureService("node-01", "Systemd FD Exhaustion")
+	tracker.EnsureService(hostname, "Systemd FD Exhaustion")
+	tracker.EnsureService(hostname, "nrdc")
+	tracker.EnsureService(hostname, "K8s Node Ready")
+	tracker.EnsureService(hostname, "Systemd FD Exhaustion")
 	store.Mu.Unlock()
 
 	store.Mu.RLock()
 	defer store.Mu.RUnlock()
 
-	fd := store.GetService("node-01", "Systemd FD Exhaustion")
+	fd := store.GetService(hostname, "Systemd FD Exhaustion")
 	if fd == nil {
 		t.Fatal("Systemd FD Exhaustion service not created")
 	}
-	if len(fd.NotifyDeps) != 1 {
-		t.Fatalf("NotifyDeps len = %d, want 1", len(fd.NotifyDeps))
+	if len(fd.NotifyDeps) != 2 {
+		t.Fatalf("NotifyDeps len = %d, want 2", len(fd.NotifyDeps))
 	}
-	if len(fd.ExecDeps) != 1 {
-		t.Fatalf("ExecDeps len = %d, want 1", len(fd.ExecDeps))
+	if len(fd.ExecDeps) != 0 {
+		t.Fatalf("ExecDeps len = %d, want 0 so freshness still executes", len(fd.ExecDeps))
 	}
-	dep := fd.NotifyDeps[0]
-	if dep.Service == nil || dep.Service.Description != "K8s Node Ready" {
-		t.Fatalf("dependency master = %#v, want K8s Node Ready", dep.Service)
+	masters := map[string]bool{}
+	for _, dep := range fd.NotifyDeps {
+		masters[dep.Service.Description] = true
 	}
-	if got := len(store.ServiceDependencies); got != 1 {
-		t.Fatalf("ServiceDependencies len = %d, want 1", got)
+	for _, want := range []string{"nrdc", "K8s Node Ready"} {
+		if !masters[want] {
+			t.Errorf("missing dependency master %q; got %v", want, masters)
+		}
+	}
+	nodeReady := store.GetService(hostname, "K8s Node Ready")
+	if len(nodeReady.NotifyDeps) != 1 || nodeReady.NotifyDeps[0].Service.Description != "nrdc" {
+		t.Fatalf("Node Ready parents = %#v, want only nrdc", nodeReady.NotifyDeps)
+	}
+	if got := len(store.ServiceDependencies); got != 3 {
+		t.Fatalf("ServiceDependencies len = %d, want 3", got)
 	}
 }
 
-func TestGeneratedCfgContainsSystemdFDDependency(t *testing.T) {
+func TestGeneratedCfgContainsProducerAndK8sDependencies(t *testing.T) {
 	tracker, store, path := trackerWithCfg(t)
+	hostname := "k8s-local-a1b2c3.fieldio.com"
 
 	store.Mu.Lock()
-	tracker.EnsureService("node-01", "K8s Node Ready")
-	tracker.EnsureService("node-01", "Systemd FD Exhaustion")
+	tracker.EnsureService(hostname, "nrdc")
+	tracker.EnsureService(hostname, "K8s Node Ready")
+	tracker.EnsureService(hostname, "Systemd FD Exhaustion")
 	store.Mu.Unlock()
 
 	cfg := readCfg(t, path)
 	for _, want := range []string{
 		"define servicedependency {",
-		"host_name                       node-01",
+		"host_name                       " + hostname,
+		"service_description             nrdc",
 		"service_description             K8s Node Ready",
-		"dependent_host_name             node-01",
+		"dependent_host_name             " + hostname,
 		"dependent_service_description   Systemd FD Exhaustion",
-		"execution_failure_criteria      w,u,c,p",
+		"execution_failure_criteria      n",
 		"notification_failure_criteria   w,u,c,p",
 	} {
 		if !strings.Contains(cfg, want) {
@@ -397,8 +441,33 @@ func TestGeneratedCfgPruneRemovesExpiredEntries(t *testing.T) {
 	if strings.Contains(cfg, "goneby") {
 		t.Errorf("cfg still references pruned host goneby:\n%s", cfg)
 	}
-	if strings.Contains(cfg, "stale") {
+	if strings.Contains(cfg, "service_description     stale") {
 		t.Errorf("cfg still references pruned service stale:\n%s", cfg)
+	}
+}
+
+func TestGeneratedCfgPolicyAndGroups(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+	hostname := "k8s-local-a1b2c3.fieldio.com"
+
+	store.Mu.Lock()
+	tracker.EnsureService(hostname, "nrdc")
+	tracker.EnsureService(hostname, "K8s Node Ready")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	for _, want := range []string{
+		"hostgroups              discovered-hosts,k8s-local-nodes",
+		"active_checks_enabled   0",
+		"check_command           check_dummy!3!UNKNOWN - passive result stale",
+		"freshness_threshold     180",
+		"notification_options    u,c,r",
+		"servicegroups           passive-services,kubernetes-node-services",
+		"retain_nonstatus_information   0",
+	} {
+		if !strings.Contains(cfg, want) {
+			t.Fatalf("cfg missing policy %q:\n%s", want, cfg)
+		}
 	}
 }
 

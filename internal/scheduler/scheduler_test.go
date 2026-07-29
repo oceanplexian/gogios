@@ -363,3 +363,46 @@ func TestRecurringEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestFreshnessEventsInvokeTheirCallbacks(t *testing.T) {
+	s := New(objects.DefaultConfig(), nil, nil, make(chan *objects.CheckResult, 1))
+	serviceCalls := 0
+	hostCalls := 0
+	s.OnServiceFreshnessCheck = func(time.Time) { serviceCalls++ }
+	s.OnHostFreshnessCheck = func(time.Time) { hostCalls++ }
+	now := time.Now()
+
+	s.handleEvent(&Event{Type: EventSFreshnessCheck}, now)
+	s.handleEvent(&Event{Type: EventHFreshnessCheck}, now)
+
+	if serviceCalls != 1 || hostCalls != 1 {
+		t.Fatalf("freshness callbacks = service:%d host:%d, want 1 each",
+			serviceCalls, hostCalls)
+	}
+}
+
+func TestRegisterServiceMakesDynamicServiceDispatchable(t *testing.T) {
+	cfg := objects.DefaultConfig()
+	host := &objects.Host{Name: "dynamic"}
+	s := New(cfg, []*objects.Host{host}, nil, make(chan *objects.CheckResult, 1))
+	svc := &objects.Service{
+		Host:                host,
+		Description:         "nrdc",
+		ActiveChecksEnabled: false,
+	}
+	s.RegisterService(svc)
+	called := false
+	s.OnRunServiceCheck = func(got *objects.Service, options int) {
+		called = got == svc && options&objects.CheckOptionFreshnessCheck != 0
+	}
+	s.handleEvent(&Event{
+		Type:               EventServiceCheck,
+		HostName:           host.Name,
+		ServiceDescription: svc.Description,
+		CheckOptions: objects.CheckOptionForceExecution |
+			objects.CheckOptionFreshnessCheck,
+	}, time.Now())
+	if !called {
+		t.Fatal("registered dynamic service did not dispatch forced freshness check")
+	}
+}

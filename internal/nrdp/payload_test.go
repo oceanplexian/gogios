@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/oceanplexian/gogios/internal/objects"
 )
 
 func TestDetectFormat(t *testing.T) {
@@ -290,6 +292,33 @@ func TestGenerateRequestID(t *testing.T) {
 				t.Fatalf("char %c not in A-Z", c)
 			}
 		}
+	}
+}
+
+func TestNormalizeResultCleanCordonIsMaintenanceWarning(t *testing.T) {
+	result := NormalizeResult(NRDPResult{
+		Hostname:    "k8s-local-a1b2c3.fieldio.com",
+		Servicename: "K8s Node Ready",
+		Status:      objects.ServiceCritical,
+		Output:      "CRITICAL - Cordoned,taints=node.kubernetes.io/unschedulable",
+	})
+	if result.Status != objects.ServiceWarning {
+		t.Fatalf("status = %d, want WARNING", result.Status)
+	}
+	if !strings.HasPrefix(result.Output, "MAINTENANCE - intentionally cordoned:") {
+		t.Fatalf("output = %q, want maintenance marker", result.Output)
+	}
+}
+
+func TestNormalizeResultDoesNotMaskUnplannedNodeFailure(t *testing.T) {
+	result := NormalizeResult(NRDPResult{
+		Hostname:    "k8s-local-a1b2c3.fieldio.com",
+		Servicename: "K8s Node Ready",
+		Status:      objects.ServiceCritical,
+		Output:      "CRITICAL - Cordoned,NotReady,DiskPressure",
+	})
+	if result.Status != objects.ServiceCritical {
+		t.Fatalf("status = %d, want CRITICAL", result.Status)
 	}
 }
 

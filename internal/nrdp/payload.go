@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/oceanplexian/gogios/internal/objects"
 )
 
 // Format detection constants.
@@ -162,6 +164,39 @@ func parseJSON(data []byte) ([]NRDPResult, error) {
 		}
 	}
 	return results, nil
+}
+
+// NormalizeResult applies monitoring policy to otherwise syntactically valid
+// passive results. A clean Kubernetes cordon is planned-maintenance state:
+// keep it visible as WARNING so it can suppress child notifications, but do
+// not classify it as an infrastructure outage. Any actual readiness or
+// pressure symptom remains untouched and CRITICAL.
+func NormalizeResult(result NRDPResult) NRDPResult {
+	if !strings.HasPrefix(result.Hostname, "k8s-local-") ||
+		result.Servicename != k8sNodeReadyServiceName ||
+		result.Status != objects.ServiceCritical {
+		return result
+	}
+
+	lower := strings.ToLower(result.Output)
+	if !strings.Contains(lower, "cordoned") {
+		return result
+	}
+	for _, unplanned := range []string{
+		"notready",
+		"memorypressure",
+		"diskpressure",
+		"pidpressure",
+		"networkunavailable",
+	} {
+		if strings.Contains(lower, unplanned) {
+			return result
+		}
+	}
+
+	result.Status = objects.ServiceWarning
+	result.Output = "MAINTENANCE - intentionally cordoned: " + result.Output
+	return result
 }
 
 // clampStatus ensures the status value is in the valid 0-3 range.

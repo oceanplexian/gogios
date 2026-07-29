@@ -168,6 +168,7 @@ func (s *Server) handleNRDP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		result = NormalizeResult(result)
 		result.Source = source
 
 		// Build check result and inject into pipeline.

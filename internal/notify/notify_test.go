@@ -139,6 +139,48 @@ func TestServiceNotification_Downtime(t *testing.T) {
 	}
 }
 
+func TestPlannedCordonSuppressesNormalHostAndServiceNotifications(t *testing.T) {
+	ne := newTestEngine()
+	now := time.Now()
+	host := &objects.Host{
+		Name:                 "k8s-local-a1b2c3.fieldio.com",
+		CurrentState:         objects.HostDown,
+		StateType:            objects.StateTypeHard,
+		NotificationsEnabled: true,
+		NotificationOptions:  objects.OptDown | objects.OptRecovery,
+	}
+	nodeReady := &objects.Service{
+		Host:               host,
+		Description:        "K8s Node Ready",
+		CurrentState:       objects.ServiceWarning,
+		PluginOutput:       "MAINTENANCE - intentionally cordoned: CRITICAL - Cordoned",
+		LastCheck:          now,
+		FreshnessThreshold: 1800,
+	}
+	_ = ne.Store.AddHost(host)
+	_ = ne.Store.AddService(nodeReady)
+	svc := &objects.Service{
+		Host:                 host,
+		Description:          "K8s Kubelet Health",
+		CurrentState:         objects.ServiceCritical,
+		StateType:            objects.StateTypeHard,
+		NotificationsEnabled: true,
+		NotificationOptions:  objects.OptCritical,
+	}
+
+	if ne.checkHostNotificationViability(host, objects.NotificationNormal, 0) == 0 {
+		t.Fatal("planned cordon must suppress the dynamic host problem")
+	}
+	if ne.checkServiceNotificationViability(svc, objects.NotificationNormal, 0) == 0 {
+		t.Fatal("planned cordon must suppress child service problems")
+	}
+
+	nodeReady.LastCheck = now.Add(-31 * time.Minute)
+	if ne.hostInPlannedMaintenance(host, now) {
+		t.Fatal("maintenance marker must expire with freshness")
+	}
+}
+
 func TestServiceNotification_AckPassesUnlessOK(t *testing.T) {
 	ne := newTestEngine()
 	svc := &objects.Service{
@@ -190,10 +232,10 @@ func TestServiceNotification_NumberTracking(t *testing.T) {
 func TestHostNotification_BasicFlow(t *testing.T) {
 	ne := newTestEngine()
 	contact := &objects.Contact{
-		Name:                       "admin",
-		HostNotificationsEnabled:   true,
-		HostNotificationOptions:    objects.OptDown | objects.OptRecovery,
-		HostNotificationCommands:   []*objects.Command{{Name: "notify", CommandLine: "true"}},
+		Name:                     "admin",
+		HostNotificationsEnabled: true,
+		HostNotificationOptions:  objects.OptDown | objects.OptRecovery,
+		HostNotificationCommands: []*objects.Command{{Name: "notify", CommandLine: "true"}},
 	}
 	hst := &objects.Host{
 		Name:                 "h1",
