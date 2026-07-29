@@ -712,3 +712,45 @@ func TestHealLoadedObjectsAppliesPolicyBeforeFirstPassiveResult(t *testing.T) {
 			len(host.HostGroups), len(kubelet.ServiceGroups))
 	}
 }
+
+func TestHealLoadedObjectsPreservesUnseenServicesInGeneratedConfig(t *testing.T) {
+	tracker, store, path := trackerWithCfg(t)
+	host := &objects.Host{
+		Name:    "central",
+		Dynamic: true,
+	}
+	if err := store.AddHost(host); err != nil {
+		t.Fatal(err)
+	}
+	addService := func(description string) {
+		service := &objects.Service{
+			Host:        host,
+			Description: description,
+			Dynamic:     true,
+		}
+		if err := store.AddService(service); err != nil {
+			t.Fatal(err)
+		}
+		host.Services = append(host.Services, service)
+	}
+	addService("nrdc")
+	addService("Five Hour Check")
+
+	tracker.HealLoadedObjects()
+
+	// Simulate a newly introduced fast producer result arriving before the
+	// five-hour check. Creating it rewrites the generated config from
+	// tracker.records.
+	store.Mu.Lock()
+	tracker.EnsureService("central", "New Fast Check")
+	store.Mu.Unlock()
+
+	cfg := readCfg(t, path)
+	if !strings.Contains(cfg, "service_description     Five Hour Check") {
+		t.Fatalf("startup inventory lost unseen low-frequency service:\n%s", cfg)
+	}
+	if !strings.Contains(cfg,
+		"dependent_service_description   Five Hour Check") {
+		t.Fatalf("startup inventory lost dependency for unseen service:\n%s", cfg)
+	}
+}

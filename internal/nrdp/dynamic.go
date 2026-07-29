@@ -468,7 +468,6 @@ func (d *DynamicTracker) defaultContactGroups() []*objects.ContactGroup {
 // creating a policy hole that can last for hours after every rollout.
 func (d *DynamicTracker) HealLoadedObjects() {
 	d.store.Mu.Lock()
-	defer d.store.Mu.Unlock()
 
 	for _, host := range d.store.Hosts {
 		if host != nil && host.Dynamic {
@@ -485,6 +484,35 @@ func (d *DynamicTracker) HealLoadedObjects() {
 			d.ensureDynamicServiceDependenciesForHost(host.Name)
 		}
 	}
+
+	// Adopt every restored dynamic object before NRDP starts accepting new
+	// results. The generated config writer emits d.records, so leaving this
+	// map empty until each producer reports would make the first fast check
+	// rewrite the file without any low-frequency services. They would remain
+	// in this process from the already-loaded config, but disappear on the
+	// next restart. Grant the same full-TTL startup grace used by Prune.
+	now := time.Now()
+	recordKeys := make([]string, 0)
+	for _, host := range d.store.Hosts {
+		if host != nil && host.Dynamic {
+			recordKeys = append(recordKeys, host.Name)
+		}
+	}
+	for _, service := range d.store.Services {
+		if service != nil && service.Dynamic && service.Host != nil {
+			recordKeys = append(recordKeys,
+				service.Host.Name+"\t"+service.Description)
+		}
+	}
+	d.store.Mu.Unlock()
+
+	d.mu.Lock()
+	for _, key := range recordKeys {
+		if _, exists := d.records[key]; !exists {
+			d.records[key] = now
+		}
+	}
+	d.mu.Unlock()
 }
 
 func (d *DynamicTracker) healDynamicHost(host *objects.Host) {
