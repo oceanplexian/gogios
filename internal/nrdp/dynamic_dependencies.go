@@ -95,7 +95,15 @@ func (r dynamicServiceDependencyRule) matchesDependent(description string) bool 
 	if description == r.master || r.excludedDependents[description] {
 		return false
 	}
-	matched, err := path.Match(r.dependentPattern, description)
+	// path.Match treats "/" as a path separator, so "*" does not match
+	// service descriptions such as "test.fn2.ai HTTPS /health". Nagios
+	// service descriptions are opaque names, not filesystem paths. Replace
+	// slashes in both operands before applying the glob so every character in
+	// a service name participates in the same wildcard namespace.
+	const slashPlaceholder = "\uE000"
+	pattern := strings.ReplaceAll(r.dependentPattern, "/", slashPlaceholder)
+	name := strings.ReplaceAll(description, "/", slashPlaceholder)
+	matched, err := path.Match(pattern, name)
 	return err == nil && matched
 }
 

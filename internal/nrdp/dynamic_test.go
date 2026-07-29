@@ -354,6 +354,7 @@ func TestEnsureServiceWiresProducerAndK8sDependencies(t *testing.T) {
 
 	store.Mu.Lock()
 	tracker.EnsureService(hostname, "Systemd FD Exhaustion")
+	tracker.EnsureService(hostname, "API /health")
 	tracker.EnsureService(hostname, "nrdc")
 	tracker.EnsureService(hostname, "K8s Node Ready")
 	tracker.EnsureService(hostname, "Systemd FD Exhaustion")
@@ -385,8 +386,12 @@ func TestEnsureServiceWiresProducerAndK8sDependencies(t *testing.T) {
 	if len(nodeReady.NotifyDeps) != 1 || nodeReady.NotifyDeps[0].Service.Description != "nrdc" {
 		t.Fatalf("Node Ready parents = %#v, want only nrdc", nodeReady.NotifyDeps)
 	}
-	if got := len(store.ServiceDependencies); got != 3 {
-		t.Fatalf("ServiceDependencies len = %d, want 3", got)
+	slashed := store.GetService(hostname, "API /health")
+	if len(slashed.NotifyDeps) != 2 {
+		t.Fatalf("slash service parents = %d, want nrdc + Node Ready", len(slashed.NotifyDeps))
+	}
+	if got := len(store.ServiceDependencies); got != 5 {
+		t.Fatalf("ServiceDependencies len = %d, want 5", got)
 	}
 }
 
@@ -398,6 +403,7 @@ func TestGeneratedCfgContainsProducerAndK8sDependencies(t *testing.T) {
 	tracker.EnsureService(hostname, "nrdc")
 	tracker.EnsureService(hostname, "K8s Node Ready")
 	tracker.EnsureService(hostname, "Systemd FD Exhaustion")
+	tracker.EnsureService(hostname, "API /health")
 	store.Mu.Unlock()
 
 	cfg := readCfg(t, path)
@@ -408,6 +414,7 @@ func TestGeneratedCfgContainsProducerAndK8sDependencies(t *testing.T) {
 		"service_description             K8s Node Ready",
 		"dependent_host_name             " + hostname,
 		"dependent_service_description   Systemd FD Exhaustion",
+		"dependent_service_description   API /health",
 		"execution_failure_criteria      n",
 		"notification_failure_criteria   w,u,c,p",
 	} {
